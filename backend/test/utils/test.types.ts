@@ -14,3 +14,34 @@ export interface CharacterListBody {
   nextCursor: string | null;
   total: number;
 }
+
+export interface SquadMemberBody {
+  position: number;
+  character: CharacterBody;
+}
+
+export interface AbilityStatBody {
+  name: string;
+  average: number | null;
+  min: number | null;
+  max: number | null;
+}
+
+export interface SquadBody {
+  id: string;
+  name: string;
+  members: SquadMemberBody[];
+  stats: {
+    memberCount: number;
+    overallAverage: number | null;
+    abilities: AbilityStatBody[];
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SquadSummaryBody {
+  id: string;
+  name: string;
+  memberCount: number;
+}

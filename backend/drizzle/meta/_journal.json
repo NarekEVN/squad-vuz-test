@@ -22,6 +22,13 @@
       "when": 1791197080165,
       "tag": "0002_create_characters",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791206759956,
+      "tag": "0003_create_squads",
+      "breakpoints": true
     }
   ]
 }

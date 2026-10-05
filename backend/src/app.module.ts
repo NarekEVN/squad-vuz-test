@@ -13,6 +13,7 @@ import { HealthModule } from './health/health.module.js';
 import { RedisModule } from './integrations/redis/redis.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CharactersModule } from './modules/characters/characters.module.js';
+import { SquadsModule } from './modules/squads/squads.module.js';
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { CharactersModule } from './modules/characters/characters.module.js';
     HealthModule,
     AuthModule,
     CharactersModule,
+    SquadsModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

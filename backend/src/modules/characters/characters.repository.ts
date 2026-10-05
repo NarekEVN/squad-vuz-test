@@ -71,6 +71,17 @@ export class CharactersRepository {
     return row;
   }
 
+  async findByIds(ids: number[]): Promise<CharacterBaseRow[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+    return this.db
+      .select(CHARACTER_BASE_COLUMNS)
+      .from(characters)
+      .innerJoin(universes, eq(universes.id, characters.universeId))
+      .where(inArray(characters.id, ids));
+  }
+
   async findTags(characterIds: number[]): Promise<CharacterTagRow[]> {
     if (characterIds.length === 0) {
       return [];

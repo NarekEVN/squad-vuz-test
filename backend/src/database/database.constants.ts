@@ -10,3 +10,5 @@ export const ABILITY_NAMES = [
   'Power',
   'Energy',
 ] as const;
+
+export const SQUAD_MAX_MEMBERS = 6;

@@ -1,5 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { ErrorCode } from '../../common/constants/error-codes.constants.js';
+import { Injectable } from '@nestjs/common';
 import { ABILITY_NAMES } from '../../database/database.constants.js';
 import { CacheService } from '../../integrations/redis/cache.service.js';
 import { CacheScope } from '../../integrations/redis/redis.constants.js';
@@ -9,6 +8,7 @@ import {
   encodeCharacterCursor,
   keysetFromCursor,
 } from './characters.cursor.js';
+import { characterNotFound } from './characters.errors.js';
 import { toCharacterDtos } from './characters.mapper.js';
 import { CharactersRepository } from './characters.repository.js';
 import {
@@ -61,11 +61,13 @@ export class CharactersService {
       },
     );
     if (!result.value) {
-      throw new NotFoundException(`Character ${id} does not exist`, {
-        description: ErrorCode.CharacterNotFound,
-      });
+      throw characterNotFound(id);
     }
     return { value: result.value, status: result.status };
+  }
+
+  async findManyByIds(ids: number[]): Promise<CharacterDto[]> {
+    return this.withDetails(await this.charactersRepository.findByIds(ids));
   }
 
   filters(): Promise<CacheResult<CharacterFiltersResponseDto>> {

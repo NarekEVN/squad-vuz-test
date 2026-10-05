@@ -8,11 +8,15 @@ export type Database = NodePgDatabase<typeof schema>;
 
 export type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
+export type DatabaseExecutor = Database | Transaction;
+
 export type AbilityName = (typeof ABILITY_NAMES)[number];
 
 export type UserRow = typeof schema.users.$inferSelect;
 export type NewUserRow = typeof schema.users.$inferInsert;
 export type CharacterRow = typeof schema.characters.$inferSelect;
+export type SquadRow = typeof schema.squads.$inferSelect;
+export type SquadMemberRow = typeof schema.squadMembers.$inferSelect;
 
 export type SourceCharacter = z.infer<typeof sourceCharacterSchema>;
 

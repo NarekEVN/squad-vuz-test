@@ -24,6 +24,10 @@ export default tseslint.config(
         { allowWithDecorator: true },
       ],
       '@typescript-eslint/no-floating-promises': 'error',
+      '@typescript-eslint/no-confusing-void-expression': [
+        'error',
+        { ignoreArrowShorthand: true },
+      ],
       '@typescript-eslint/restrict-template-expressions': [
         'error',
         { allowNumber: true },
