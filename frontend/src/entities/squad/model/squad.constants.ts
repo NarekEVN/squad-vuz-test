@@ -7,3 +7,5 @@ export const STAT_GROUPS = [
   ['Technique'],
   ['Survivability', 'Energy'],
 ] as const
+
+export const SQUAD_HISTORY_LIMIT = 50

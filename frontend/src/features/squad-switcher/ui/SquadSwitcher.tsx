@@ -15,6 +15,7 @@ import { useActiveSquad } from '../../../entities/squad/model/use-active-squad'
 import { apiErrorMessage } from '../../../shared/lib/api-error'
 import { useAppDispatch } from '../../../shared/lib/store-hooks'
 import { notified } from '../../../shared/model/notifications.slice'
+import { SquadHistoryDialog } from '../../squad-history/ui/SquadHistoryDialog'
 import { type SquadDialogMode } from '../model/squad-switcher.types'
 import { SquadNameDialog } from './SquadNameDialog'
 
@@ -27,6 +28,7 @@ export function SquadSwitcher() {
   const [menuAnchor, setMenuAnchor] = useState<HTMLElement | null>(null)
   const [dialog, setDialog] = useState<SquadDialogMode>(null)
   const [dialogError, setDialogError] = useState<string | null>(null)
+  const [historyOpen, setHistoryOpen] = useState(false)
 
   const openDialog = (mode: SquadDialogMode) => {
     setMenuAnchor(null)
@@ -96,10 +98,25 @@ export function SquadSwitcher() {
         <MenuItem onClick={() => openDialog('rename')} disabled={!squadId}>
           Rename squad
         </MenuItem>
+        <MenuItem
+          onClick={() => {
+            setMenuAnchor(null)
+            setHistoryOpen(true)
+          }}
+          disabled={!squadId}
+        >
+          Squad history
+        </MenuItem>
         <MenuItem onClick={removeSquad} disabled={!squadId} sx={{ color: 'error.main' }}>
           Delete squad
         </MenuItem>
       </Menu>
+      <SquadHistoryDialog
+        squadId={squadId}
+        squadName={squad?.name}
+        open={historyOpen}
+        onClose={() => setHistoryOpen(false)}
+      />
       <SquadNameDialog
         open={dialog !== null}
         title={dialog === 'create' ? 'New squad' : 'Rename squad'}

@@ -11,7 +11,9 @@ import { type AppConfigService } from './config/config.types.js';
 import { configuration } from './config/configuration.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
+import { MongoModule } from './integrations/mongo/mongo.module.js';
 import { RedisModule } from './integrations/redis/redis.module.js';
+import { ActivityModule } from './modules/activity/activity.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CharactersModule } from './modules/characters/characters.module.js';
 import { RealtimeModule } from './modules/realtime/realtime.module.js';
@@ -65,11 +67,13 @@ import { SquadsModule } from './modules/squads/squads.module.js';
     }),
     DatabaseModule,
     RedisModule,
+    MongoModule,
     HealthModule,
     AuthModule,
     CharactersModule,
     SquadsModule,
     RealtimeModule,
+    ActivityModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

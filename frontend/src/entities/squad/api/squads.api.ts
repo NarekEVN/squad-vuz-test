@@ -1,9 +1,11 @@
 import { API_TAGS } from '../../../shared/api/api.constants'
 import { baseApi } from '../../../shared/api/base-api'
 import { withMemberAdded, withMemberRemoved } from '../lib/optimistic-members'
+import { SQUAD_HISTORY_LIMIT } from '../model/squad.constants'
 import {
   type CreateSquadArgs,
   type Squad,
+  type SquadHistory,
   type SquadMemberArgs,
   type SquadSummary,
   type UpdateSquadArgs,
@@ -17,6 +19,13 @@ export const squadsApi = baseApi.injectEndpoints({
     }),
     getSquad: build.query<Squad, string>({
       query: (squadId) => `/squads/${squadId}`,
+      providesTags: (_result, _error, squadId) => [{ type: API_TAGS.squad, id: squadId }],
+    }),
+    getSquadHistory: build.query<SquadHistory, string>({
+      query: (squadId) => ({
+        url: `/squads/${squadId}/history`,
+        params: { limit: SQUAD_HISTORY_LIMIT },
+      }),
       providesTags: (_result, _error, squadId) => [{ type: API_TAGS.squad, id: squadId }],
     }),
     createSquad: build.mutation<Squad, CreateSquadArgs>({
@@ -80,6 +89,7 @@ export const squadsApi = baseApi.injectEndpoints({
 export const {
   useGetSquadsQuery,
   useGetSquadQuery,
+  useGetSquadHistoryQuery,
   useCreateSquadMutation,
   useUpdateSquadMutation,
   useDeleteSquadMutation,

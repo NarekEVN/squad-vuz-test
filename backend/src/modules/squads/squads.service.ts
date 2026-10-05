@@ -13,6 +13,7 @@ import {
   characterNotInSquad,
   unknownCharacters,
 } from './domain/squad.errors.js';
+import { diffMembers } from './domain/squad.diff.js';
 import {
   assertCanAddMember,
   assertValidMemberList,
@@ -30,7 +31,11 @@ import {
 } from './squads.constants.js';
 import { toSquadDto, toSquadSummaryDto } from './squads.mapper.js';
 import { SquadsRepository } from './squads.repository.js';
-import { type SquadChangedEvent, type SquadState } from './squads.types.js';
+import {
+  type NewSquadChangedEvent,
+  type SquadChangedEvent,
+  type SquadState,
+} from './squads.types.js';
 
 @Injectable()
 export class SquadsService {
@@ -74,11 +79,20 @@ export class SquadsService {
       await this.squadsRepository.insertMembers(tx, squad.id, members);
       return { squad, members };
     });
-    this.publish({
+    const created = {
       userId,
       squadId: state.squad.id,
-      reason: SquadChange.Created,
-    });
+      squadName: state.squad.name,
+    };
+    this.publish({ ...created, reason: SquadChange.Created });
+    for (const characterId of characterIds) {
+      this.publish({
+        ...created,
+        reason: SquadChange.MemberAdded,
+        characterId,
+        partOfBulkChange: true,
+      });
+    }
     return this.toDto(state);
   }
 
@@ -92,6 +106,7 @@ export class SquadsService {
       assertValidMemberList(characterIds);
     }
 
+    let previousIds: number[] = [];
     const state = await this.squadsRepository.transaction(async (tx) => {
       if (name !== undefined) {
         await this.squadsRepository.lockUser(tx, userId);
@@ -105,6 +120,9 @@ export class SquadsService {
       }
       if (characterIds) {
         await this.assertCharactersExist(tx, characterIds);
+        previousIds = (
+          await this.squadsRepository.findMembers(squadId, tx)
+        ).map((member) => member.characterId);
         await this.squadsRepository.deleteAllMembers(tx, squadId);
         await this.squadsRepository.insertMembers(
           tx,
@@ -120,15 +138,36 @@ export class SquadsService {
       const members = await this.squadsRepository.findMembers(squadId, tx);
       return { squad, members };
     });
-    this.publish({ userId, squadId, reason: SquadChange.Updated });
+    const updated = { userId, squadId, squadName: state.squad.name };
+    this.publish({ ...updated, reason: SquadChange.Updated });
+    if (characterIds) {
+      const { added, removed } = diffMembers(previousIds, characterIds);
+      for (const characterId of removed) {
+        this.publish({
+          ...updated,
+          reason: SquadChange.MemberRemoved,
+          characterId,
+          partOfBulkChange: true,
+        });
+      }
+      for (const characterId of added) {
+        this.publish({
+          ...updated,
+          reason: SquadChange.MemberAdded,
+          characterId,
+          partOfBulkChange: true,
+        });
+      }
+    }
     return this.toDto(state);
   }
 
   async remove(userId: string, squadId: string): Promise<void> {
-    if (!(await this.squadsRepository.delete(userId, squadId))) {
+    const squadName = await this.squadsRepository.delete(userId, squadId);
+    if (squadName === undefined) {
       throw squadNotFound();
     }
-    this.publish({ userId, squadId, reason: SquadChange.Deleted });
+    this.publish({ userId, squadId, squadName, reason: SquadChange.Deleted });
   }
 
   async addMember(
@@ -161,6 +200,7 @@ export class SquadsService {
     this.publish({
       userId,
       squadId,
+      squadName: state.squad.name,
       reason: SquadChange.MemberAdded,
       characterId,
     });
@@ -186,14 +226,16 @@ export class SquadsService {
     this.publish({
       userId,
       squadId,
+      squadName: state.squad.name,
       reason: SquadChange.MemberRemoved,
       characterId,
     });
     return this.toDto(state);
   }
 
-  private publish(event: SquadChangedEvent): void {
-    this.events.emit(SQUAD_CHANGED_EVENT, event);
+  private publish(event: NewSquadChangedEvent): void {
+    const stamped: SquadChangedEvent = { ...event, occurredAt: new Date() };
+    this.events.emit(SQUAD_CHANGED_EVENT, stamped);
   }
 
   private async lockOwnedSquad(

@@ -268,7 +268,7 @@ New members take the first free slot (1–6), so removing a character leaves a g
 ## Bonus features
 
 - [x] **WebSockets:** squad sync across tabs and devices, live popularity, Redis adapter
-- [ ] MongoDB: squad activity log with history and pick-statistics endpoints
+- [x] **MongoDB:** squad activity log with a history timeline and pick statistics built with an aggregation pipeline
 
 ### WebSockets
 
@@ -298,7 +298,44 @@ A Socket.IO gateway at namespace **`/realtime`** on the API host (`ws://localhos
 - Popularity is a `COUNT(*) … GROUP BY` over `squad_members` (indexed on `character_id`), recomputed at most twice a second per instance.
 - A token that expires while connected keeps that socket open until it reconnects.
 
-_TODO: explain why the activity log fits a document store._
+### MongoDB activity log
+
+Every squad change is also written to MongoDB as an immutable event in the `activity_events` collection:
+
+```json
+{
+  "_id": "6702…",
+  "type": "member-added",
+  "userId": "…",
+  "squadId": "…",
+  "squadName": "Saiyan Pride",
+  "character": { "id": 37, "name": "Adult Gohan", "thumbnail": "https://…" },
+  "occurredAt": "2026-10-05T17:57:00.000Z"
+}
+```
+
+| Endpoint (JWT)                         | What it returns                                                                                                                                                                                                                                                                                    |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /squads/:id/history?limit&cursor` | The squad's timeline, newest first, with cursor paging. It still works after the squad is deleted, and returns an empty list for squads owned by someone else.                                                                                                                                     |
+| `GET /activity/stats/picks?days=30`    | Pick statistics across all users, from **one aggregation pipeline**: `$match` on the time window → `$facet` with the top characters (`$group` by character with added/removed counts and last pick, `$addFields` net, `$sort`, `$limit`), a daily series (`$group` by `$dateToString`) and totals. |
+
+The frontend shows the timeline under **squad menu → Squad history**.
+
+**How it's wired:**
+
+- It listens to the same `squad.changed` domain events as the WebSocket gateway, using an async listener.
+- Writes are **fire-and-forget after the Postgres commit**. If MongoDB is down, squad changes still succeed and the failure is only logged. `/health` then reports Mongo as `degraded` but still returns 200, so the container stays healthy. Postgres and Redis remain hard requirements (503).
+- Bulk changes are recorded per character. Creating a squad with members, or replacing members with `PATCH`, records one `member-added`/`member-removed` per character (computed by `domain/squad.diff.ts`), so the statistics count every pick.
+- Events are stamped when they're published, and their ObjectId is assigned before any async work, so the timeline order is deterministic even for several events in the same millisecond.
+- Indexes: `{ squadId, userId, occurredAt, _id }` for the timeline, `{ type, occurredAt }` for the stats `$match`, and `{ userId, occurredAt }` for a future "my activity" feed.
+
+**Why a document store fits this data:**
+
+- **Append-only and immutable.** Events are written once and never updated or joined against, so relational guarantees (foreign keys, transactions across tables) bring no benefit here. The log also deliberately outlives the rows it describes: deleted squads keep their history.
+- **Snapshots, not references.** Each event embeds the squad and character name _as they were_, so a timeline reads correctly after renames and deletions. In Postgres that means duplicating columns or adding a JSON column anyway; in a document it's the natural shape.
+- **Shape varies by event type.** Member events carry a character and squad events don't. More types (renames with the previous name, imports, …) can be added without migrations.
+- **Analytics are its home turf.** `$facet` computes the top list, the daily series and the totals in a single pass, and the collection can grow or expire (TTL index) without affecting the transactional database.
+- **Counterpoint:** Postgres could do all of this with an `activity_events` table and a `jsonb` payload, with one less service to run. For a log this size that would be perfectly fine. Mongo pays off as write volume and ad-hoc analytics grow, and it keeps analytics load off the database that enforces the squad rules.
 
 ## Configuration
 

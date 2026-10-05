@@ -130,12 +130,12 @@ export class SquadsRepository {
     return squad;
   }
 
-  async delete(userId: string, squadId: string): Promise<boolean> {
-    const deleted = await this.db
+  async delete(userId: string, squadId: string): Promise<string | undefined> {
+    const [deleted] = await this.db
       .delete(squads)
       .where(and(eq(squads.id, squadId), eq(squads.userId, userId)))
-      .returning({ id: squads.id });
-    return deleted.length > 0;
+      .returning({ name: squads.name });
+    return deleted?.name;
   }
 
   findMembers(

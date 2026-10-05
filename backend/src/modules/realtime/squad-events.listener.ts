@@ -17,8 +17,16 @@ export class SquadEventsListener implements OnModuleDestroy {
   ) {}
 
   @OnEvent(SQUAD_CHANGED_EVENT)
-  onSquadChanged({ userId, ...message }: SquadChangedEvent): void {
-    this.gateway.emitSquadChanged(userId, message);
+  onSquadChanged(event: SquadChangedEvent): void {
+    if (!event.partOfBulkChange) {
+      this.gateway.emitSquadChanged(event.userId, {
+        squadId: event.squadId,
+        reason: event.reason,
+        ...(event.characterId === undefined
+          ? {}
+          : { characterId: event.characterId }),
+      });
+    }
     this.schedulePopularityBroadcast();
   }
 

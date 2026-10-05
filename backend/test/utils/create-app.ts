@@ -1,11 +1,14 @@
 import { type INestApplication } from '@nestjs/common';
 import { Test, type TestingModuleBuilder } from '@nestjs/testing';
 import { sql } from 'drizzle-orm';
+import { type Db } from 'mongodb';
 import { type App } from 'supertest/types.js';
 import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/app.setup.js';
 import { DRIZZLE } from '../../src/database/database.constants.js';
 import { type Database } from '../../src/database/database.types.js';
+import { MONGO_DB } from '../../src/integrations/mongo/mongo.constants.js';
+import { ACTIVITY_COLLECTION } from '../../src/modules/activity/activity.constants.js';
 
 export type TestApp = INestApplication<App>;
 
@@ -23,4 +26,5 @@ export async function createTestApp(
 export async function truncateAll(app: TestApp): Promise<void> {
   const db = app.get<Database>(DRIZZLE);
   await db.execute(sql`truncate table users restart identity cascade`);
+  await app.get<Db>(MONGO_DB).collection(ACTIVITY_COLLECTION).deleteMany({});
 }

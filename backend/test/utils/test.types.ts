@@ -61,3 +61,31 @@ export interface PopularityBody {
   }[];
   updatedAt: string;
 }
+
+export interface ActivityEventBody {
+  id: string;
+  type: string;
+  squadId: string;
+  squadName: string;
+  character: { id: number; name: string; thumbnail: string } | null;
+  occurredAt: string;
+}
+
+export interface SquadHistoryBody {
+  items: ActivityEventBody[];
+  nextCursor: string | null;
+}
+
+export interface PickStatsBody {
+  since: string;
+  totals: { added: number; removed: number };
+  characters: {
+    characterId: number;
+    name: string;
+    added: number;
+    removed: number;
+    net: number;
+    lastPickedAt: string | null;
+  }[];
+  daily: { date: string; added: number; removed: number }[];
+}

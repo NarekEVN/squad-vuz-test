@@ -54,3 +54,20 @@ export interface SquadMemberArgs {
 export interface ActiveSquadState {
   squadId: string | null
 }
+
+export type SquadActivityType =
+  'created' | 'updated' | 'deleted' | 'member-added' | 'member-removed'
+
+export interface SquadActivityEvent {
+  id: string
+  type: SquadActivityType
+  squadId: string
+  squadName: string
+  character: { id: number; name: string; thumbnail: string } | null
+  occurredAt: string
+}
+
+export interface SquadHistory {
+  items: SquadActivityEvent[]
+  nextCursor: string | null
+}

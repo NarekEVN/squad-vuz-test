@@ -26,7 +26,7 @@ export const envSchema = z.object({
   REDIS_URL: z.url({ protocol: /^rediss?$/ }),
   CACHE_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
 
-  MONGO_URL: z.url({ protocol: /^mongodb(\+srv)?$/ }).optional(),
+  MONGO_URL: z.url({ protocol: /^mongodb(\+srv)?$/ }),
 
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN_SECONDS: z.coerce.number().int().positive().default(3600),

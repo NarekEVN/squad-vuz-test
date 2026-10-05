@@ -44,6 +44,16 @@ export type SquadChangeReason = (typeof SquadChange)[keyof typeof SquadChange];
 export interface SquadChangedEvent {
   userId: string;
   squadId: string;
+  squadName: string;
   reason: SquadChangeReason;
   characterId?: number;
+  partOfBulkChange?: boolean;
+  occurredAt: Date;
+}
+
+export type NewSquadChangedEvent = Omit<SquadChangedEvent, 'occurredAt'>;
+
+export interface MemberDiff {
+  added: number[];
+  removed: number[];
 }
