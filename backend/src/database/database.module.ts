@@ -4,16 +4,13 @@ import {
   Module,
   type OnApplicationShutdown,
 } from '@nestjs/common';
-import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import { drizzle } from 'drizzle-orm/node-postgres';
 import { Pool } from 'pg';
-import { type AppConfigService } from '../config/configuration.js';
 import { ConfigService } from '@nestjs/config';
+import { type AppConfigService } from '../config/config.types.js';
+import { DRIZZLE, PG_POOL } from './database.constants.js';
+import { type Database } from './database.types.js';
 import * as schema from './schema/index.js';
-
-export const PG_POOL = Symbol('PG_POOL');
-export const DRIZZLE = Symbol('DRIZZLE');
-
-export type Database = NodePgDatabase<typeof schema>;
 
 @Global()
 @Module({

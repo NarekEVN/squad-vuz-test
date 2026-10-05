@@ -1,11 +1,13 @@
 import { ConflictException, Injectable } from '@nestjs/common';
-import { type UserRow } from '../../database/schema/index.js';
+import { ErrorCode } from '../../common/constants/error-codes.constants.js';
+import { type UserRow } from '../../database/database.types.js';
 import { UsersRepository } from './users.repository.js';
 
-const emailTaken = () =>
-  new ConflictException('An account with this email already exists', {
-    description: 'EMAIL_TAKEN',
+function emailTaken(): ConflictException {
+  return new ConflictException('An account with this email already exists', {
+    description: ErrorCode.EmailTaken,
   });
+}
 
 @Injectable()
 export class UsersService {

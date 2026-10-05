@@ -1,5 +1,6 @@
 import { BadRequestException } from '@nestjs/common';
 import { type z } from 'zod';
+import { ErrorCode } from '../constants/error-codes.constants.js';
 
 export function encodeCursor(payload: object): string {
   return Buffer.from(JSON.stringify(payload)).toString('base64url');
@@ -17,6 +18,6 @@ export function decodeCursor<T>(cursor: string, schema: z.ZodType<T>): T {
 
 export function invalidCursor(): BadRequestException {
   return new BadRequestException('The pagination cursor is invalid', {
-    description: 'INVALID_CURSOR',
+    description: ErrorCode.InvalidCursor,
   });
 }

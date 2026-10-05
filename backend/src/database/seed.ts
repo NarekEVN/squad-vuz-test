@@ -2,16 +2,12 @@ import { readFile } from 'node:fs/promises';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { Redis } from 'ioredis';
 import { Pool } from 'pg';
-import {
-  CacheScope,
-  cacheVersionKey,
-} from '../integrations/redis/cache-keys.js';
+import { cacheVersionKey } from '../integrations/redis/cache-keys.js';
+import { CacheScope } from '../integrations/redis/redis.constants.js';
 import * as schema from './schema/index.js';
 import { sourceCharactersSchema } from './seeders/character-source.schema.js';
-import {
-  type SeedSummary,
-  seedCharacters,
-} from './seeders/characters.seeder.js';
+import { seedCharacters } from './seeders/characters.seeder.js';
+import { type SeedSummary } from './database.types.js';
 
 export async function runSeed(
   databaseUrl: string,

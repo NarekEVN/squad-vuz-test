@@ -11,84 +11,32 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import { DRIZZLE, type Database } from '../../database/database.module.js';
+import { escapeLike } from '../../common/utils/sql.util.js';
+import { DRIZZLE } from '../../database/database.constants.js';
+import { type Database } from '../../database/database.types.js';
 import {
-  type AbilityName,
   characterAbilities,
   characters,
   characterTags,
   tags,
   universes,
 } from '../../database/schema/index.js';
+import { CHARACTER_BASE_COLUMNS } from './characters.constants.js';
 import {
-  type CharacterSortField,
-  type SortOrder,
+  type CharacterAbilityRow,
+  type CharacterBaseRow,
+  type CharacterFilters,
+  type CharacterPageRequest,
+  type CharacterTagRow,
+  type FilterOptionRow,
   type TagMatchMode,
-} from './dto/list-characters-query.dto.js';
-
-export interface CharacterFilters {
-  search?: string;
-  tags?: string[];
-  tagMatch: TagMatchMode;
-  universes?: string[];
-}
-
-export interface CharacterKeyset {
-  name: string;
-  id: number;
-}
-
-export interface CharacterPageQuery {
-  filters: CharacterFilters;
-  sort: CharacterSortField;
-  order: SortOrder;
-  after?: CharacterKeyset;
-  limit: number;
-}
-
-export interface CharacterBaseRow {
-  id: number;
-  name: string;
-  quote: string | null;
-  image: string;
-  thumbnail: string | null;
-  universe: string;
-}
-
-export interface CharacterTagRow {
-  characterId: number;
-  name: string;
-}
-
-export interface CharacterAbilityRow {
-  characterId: number;
-  ability: AbilityName;
-  score: number;
-}
-
-export interface FilterOptionRow {
-  name: string;
-  count: number;
-}
-
-const baseColumns = {
-  id: characters.id,
-  name: characters.name,
-  quote: characters.quote,
-  image: characters.image,
-  thumbnail: characters.thumbnail,
-  universe: universes.name,
-};
-
-function escapeLike(value: string): string {
-  return value.replace(/[\\%_]/g, (char) => `\\${char}`);
-}
+} from './characters.types.js';
 
 @Injectable()
 export class CharactersRepository {
   constructor(@Inject(DRIZZLE) private readonly db: Database) {}
 
-  async findPage(query: CharacterPageQuery): Promise<CharacterBaseRow[]> {
+  async findPage(query: CharacterPageRequest): Promise<CharacterBaseRow[]> {
     const direction = query.order === 'asc' ? asc : desc;
     const orderBy =
       query.sort === 'name'
@@ -96,7 +44,7 @@ export class CharactersRepository {
         : [direction(characters.id)];
 
     return this.db
-      .select(baseColumns)
+      .select(CHARACTER_BASE_COLUMNS)
       .from(characters)
       .innerJoin(universes, eq(universes.id, characters.universeId))
       .where(and(this.filterBy(query.filters), this.keysetAfter(query)))
@@ -115,7 +63,7 @@ export class CharactersRepository {
 
   async findById(id: number): Promise<CharacterBaseRow | undefined> {
     const [row] = await this.db
-      .select(baseColumns)
+      .select(CHARACTER_BASE_COLUMNS)
       .from(characters)
       .innerJoin(universes, eq(universes.id, characters.universeId))
       .where(eq(characters.id, id))
@@ -197,7 +145,7 @@ export class CharactersRepository {
       : matching;
   }
 
-  private keysetAfter(query: CharacterPageQuery): SQL | undefined {
+  private keysetAfter(query: CharacterPageRequest): SQL | undefined {
     if (!query.after) {
       return undefined;
     }

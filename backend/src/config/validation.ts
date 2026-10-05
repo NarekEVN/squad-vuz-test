@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { type Env } from './config.types.js';
 
 const commaSeparatedList = z
   .string()
@@ -32,8 +33,6 @@ export const envSchema = z.object({
 
   CHARACTERS_JSON_PATH: z.string().optional(),
 });
-
-export type Env = z.infer<typeof envSchema>;
 
 export function validateEnv(raw: Record<string, unknown>): Env {
   const result = envSchema.safeParse(raw);

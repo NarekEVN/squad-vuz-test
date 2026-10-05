@@ -21,9 +21,10 @@ import { Public } from '../../common/decorators/public.decorator.js';
 import { ErrorResponseDto } from '../../common/dto/error-response.dto.js';
 import { type AuthUser } from '../../common/types/request.types.js';
 import { AuthService } from './auth.service.js';
-import { AuthResponseDto, UserResponseDto } from './dto/auth-response.dto.js';
+import { AuthResponseDto } from './dto/auth-response.dto.js';
 import { LoginDto } from './dto/login.dto.js';
 import { RegisterDto } from './dto/register.dto.js';
+import { UserResponseDto } from './dto/user-response.dto.js';
 
 @ApiTags('auth')
 @Controller('auth')

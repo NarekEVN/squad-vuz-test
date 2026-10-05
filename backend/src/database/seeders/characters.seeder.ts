@@ -1,5 +1,10 @@
 import { inArray, sql } from 'drizzle-orm';
-import { type Database } from '../database.module.js';
+import {
+  type Database,
+  type SeedSummary,
+  type SourceCharacter,
+  type Transaction,
+} from '../database.types.js';
 import {
   characterAbilities,
   characters,
@@ -7,17 +12,6 @@ import {
   tags,
   universes,
 } from '../schema/index.js';
-import { type SourceCharacter } from './character-source.schema.js';
-
-export interface SeedSummary {
-  characters: number;
-  universes: number;
-  tags: number;
-  characterTags: number;
-  characterAbilities: number;
-}
-
-type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0];
 
 function unique(values: string[]): string[] {
   return [...new Set(values)].sort();

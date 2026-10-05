@@ -1,38 +1,18 @@
 import { readFile } from 'node:fs/promises';
 import request from 'supertest';
-import {
-  type SourceCharacter,
-  sourceCharactersSchema,
-} from '../src/database/seeders/character-source.schema.js';
-import { CacheScope } from '../src/integrations/redis/cache-keys.js';
+import { ABILITY_NAMES } from '../src/database/database.constants.js';
+import { type SourceCharacter } from '../src/database/database.types.js';
+import { sourceCharactersSchema } from '../src/database/seeders/character-source.schema.js';
 import { CacheService } from '../src/integrations/redis/cache.service.js';
-import { REDIS_CLIENT } from '../src/integrations/redis/redis.constants.js';
+import {
+  CacheScope,
+  REDIS_CLIENT,
+} from '../src/integrations/redis/redis.constants.js';
 import { createTestApp, type TestApp } from './utils/create-app.js';
-
-interface CharacterBody {
-  id: number;
-  name: string;
-  quote: string | null;
-  image: string;
-  thumbnail: string;
-  universe: string;
-  tags: string[];
-  abilities: { name: string; score: number }[];
-}
-
-interface ListBody {
-  items: CharacterBody[];
-  nextCursor: string | null;
-  total: number;
-}
-
-const ABILITY_ORDER = [
-  'Mobility',
-  'Technique',
-  'Survivability',
-  'Power',
-  'Energy',
-];
+import {
+  type CharacterBody,
+  type CharacterListBody,
+} from './utils/test.types.js';
 
 describe('Characters (e2e)', () => {
   let app: TestApp;
@@ -42,7 +22,7 @@ describe('Characters (e2e)', () => {
     request(app.getHttpServer()).get(`/api/v1${path}`).query(query);
 
   const list = async (query: Record<string, unknown> = {}) =>
-    (await get('/characters', query).expect(200)).body as ListBody;
+    (await get('/characters', query).expect(200)).body as CharacterListBody;
 
   const walkAllPages = async (query: Record<string, unknown>) => {
     const items: CharacterBody[] = [];
@@ -204,7 +184,9 @@ describe('Characters (e2e)', () => {
         .expect(200);
 
       expect(
-        (res.body as ListBody).items.map((c) => c.id).sort((a, b) => a - b),
+        (res.body as CharacterListBody).items
+          .map((c) => c.id)
+          .sort((a, b) => a - b),
       ).toEqual(
         idsWhere(
           (c) =>
@@ -269,7 +251,7 @@ describe('Characters (e2e)', () => {
         thumbnail: original.thumbnail,
         universe: original.universe,
         tags: tagNames(original),
-        abilities: ABILITY_ORDER.map((name) => ({
+        abilities: ABILITY_NAMES.map((name) => ({
           name,
           score: original.abilities.find((a) => a.abilityName === name)
             ?.abilityScore,
@@ -330,7 +312,7 @@ describe('Characters (e2e)', () => {
       expect(res.body).toEqual({
         universes: asOptions(universeCounts),
         tags: asOptions(tagCounts),
-        abilities: ABILITY_ORDER,
+        abilities: ABILITY_NAMES,
         sortFields: ['name', 'id'],
       });
     });
@@ -394,6 +376,6 @@ describe('Characters when Redis is down (e2e)', () => {
       .expect(200);
 
     expect(res.headers['x-cache']).toBe('BYPASS');
-    expect((res.body as ListBody).total).toBe(208);
+    expect((res.body as CharacterListBody).total).toBe(208);
   });
 });

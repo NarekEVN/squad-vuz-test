@@ -2,16 +2,10 @@ import { createHash } from 'node:crypto';
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import { type AppConfigService } from '../../config/configuration.js';
-import { cacheVersionKey, type CacheScope } from './cache-keys.js';
+import { type AppConfigService } from '../../config/config.types.js';
+import { cacheVersionKey } from './cache-keys.js';
 import { REDIS_CLIENT } from './redis.constants.js';
-
-export type CacheStatus = 'HIT' | 'MISS' | 'BYPASS';
-
-export interface CacheResult<T> {
-  value: T;
-  status: CacheStatus;
-}
+import { type CacheResult, type CacheScope } from './redis.types.js';
 
 @Injectable()
 export class CacheService {

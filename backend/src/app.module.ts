@@ -3,19 +3,16 @@ import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
+import { REQUEST_ID_HEADER } from './common/constants/http.constants.js';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter.js';
 import { validationExceptionFactory } from './common/exceptions/validation.exception.js';
-import {
-  configuration,
-  type AppConfigService,
-} from './config/configuration.js';
+import { type AppConfigService } from './config/config.types.js';
+import { configuration } from './config/configuration.js';
 import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { RedisModule } from './integrations/redis/redis.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CharactersModule } from './modules/characters/characters.module.js';
-
-const REQUEST_ID_HEADER = 'x-request-id';
 
 @Module({
   imports: [

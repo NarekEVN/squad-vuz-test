@@ -1,50 +1,24 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { z } from 'zod';
+import { ErrorCode } from '../../common/constants/error-codes.constants.js';
+import { ABILITY_NAMES } from '../../database/database.constants.js';
+import { CacheService } from '../../integrations/redis/cache.service.js';
+import { CacheScope } from '../../integrations/redis/redis.constants.js';
+import { type CacheResult } from '../../integrations/redis/redis.types.js';
+import { CHARACTER_SORT_FIELDS } from './characters.constants.js';
 import {
-  decodeCursor,
-  encodeCursor,
-  invalidCursor,
-} from '../../common/utils/pagination.util.js';
-import { ABILITY_NAMES } from '../../database/schema/index.js';
-import { CacheScope } from '../../integrations/redis/cache-keys.js';
-import {
-  type CacheResult,
-  CacheService,
-} from '../../integrations/redis/cache.service.js';
+  encodeCharacterCursor,
+  keysetFromCursor,
+} from './characters.cursor.js';
 import { toCharacterDtos } from './characters.mapper.js';
+import { CharactersRepository } from './characters.repository.js';
 import {
   type CharacterBaseRow,
-  type CharacterFilters,
-  type CharacterKeyset,
-  CharactersRepository,
-} from './characters.repository.js';
-import {
-  type CharacterDto,
-  type CharacterFiltersResponseDto,
-  type CharacterListResponseDto,
-} from './dto/character.dto.js';
-import {
-  CHARACTER_SORT_FIELDS,
-  type CharacterSortField,
-  type ListCharactersQueryDto,
-  SORT_ORDERS,
-  type SortOrder,
-} from './dto/list-characters-query.dto.js';
-
-const cursorSchema = z.object({
-  sort: z.enum(CHARACTER_SORT_FIELDS),
-  order: z.enum(SORT_ORDERS),
-  name: z.string(),
-  id: z.number().int(),
-});
-
-interface PageRequest {
-  filters: CharacterFilters;
-  sort: CharacterSortField;
-  order: SortOrder;
-  limit: number;
-  after?: CharacterKeyset;
-}
+  type CharacterPageRequest,
+} from './characters.types.js';
+import { type CharacterFiltersResponseDto } from './dto/character-filters-response.dto.js';
+import { type CharacterListResponseDto } from './dto/character-list-response.dto.js';
+import { type CharacterDto } from './dto/character.dto.js';
+import { type ListCharactersQueryDto } from './dto/list-characters-query.dto.js';
 
 @Injectable()
 export class CharactersService {
@@ -56,7 +30,7 @@ export class CharactersService {
   list(
     query: ListCharactersQueryDto,
   ): Promise<CacheResult<CharacterListResponseDto>> {
-    const request: PageRequest = {
+    const request: CharacterPageRequest = {
       filters: {
         search: query.search,
         tags: query.tags,
@@ -67,7 +41,7 @@ export class CharactersService {
       order: query.order,
       limit: query.limit,
       after: query.cursor
-        ? this.keysetFromCursor(query.cursor, query.sort, query.order)
+        ? keysetFromCursor(query.cursor, query.sort, query.order)
         : undefined,
     };
     return this.cache.getOrSet(
@@ -88,7 +62,7 @@ export class CharactersService {
     );
     if (!result.value) {
       throw new NotFoundException(`Character ${id} does not exist`, {
-        description: 'CHARACTER_NOT_FOUND',
+        description: ErrorCode.CharacterNotFound,
       });
     }
     return { value: result.value, status: result.status };
@@ -110,7 +84,7 @@ export class CharactersService {
   }
 
   private async loadPage(
-    request: PageRequest,
+    request: CharacterPageRequest,
   ): Promise<CharacterListResponseDto> {
     const [rows, total] = await Promise.all([
       this.charactersRepository.findPage({
@@ -127,7 +101,7 @@ export class CharactersService {
       items: await this.withDetails(page),
       nextCursor:
         hasMore && last
-          ? encodeCursor({
+          ? encodeCharacterCursor({
               sort: request.sort,
               order: request.order,
               name: last.name,
@@ -145,17 +119,5 @@ export class CharactersService {
       this.charactersRepository.findAbilities(ids),
     ]);
     return toCharacterDtos(rows, tagRows, abilityRows);
-  }
-
-  private keysetFromCursor(
-    cursor: string,
-    sort: CharacterSortField,
-    order: SortOrder,
-  ): CharacterKeyset {
-    const decoded = decodeCursor(cursor, cursorSchema);
-    if (decoded.sort !== sort || decoded.order !== order) {
-      throw invalidCursor();
-    }
-    return { name: decoded.name, id: decoded.id };
   }
 }

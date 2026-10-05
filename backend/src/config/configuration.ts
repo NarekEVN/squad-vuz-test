@@ -1,4 +1,3 @@
-import { type ConfigService } from '@nestjs/config';
 import { validateEnv } from './validation.js';
 
 export function configuration() {
@@ -30,7 +29,3 @@ export function configuration() {
     },
   };
 }
-
-export type AppConfig = ReturnType<typeof configuration>;
-
-export type AppConfigService = ConfigService<AppConfig, true>;

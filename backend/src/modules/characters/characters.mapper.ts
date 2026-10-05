@@ -2,11 +2,9 @@ import {
   type CharacterAbilityRow,
   type CharacterBaseRow,
   type CharacterTagRow,
-} from './characters.repository.js';
-import {
-  type CharacterAbilityDto,
-  type CharacterDto,
-} from './dto/character.dto.js';
+} from './characters.types.js';
+import { type CharacterAbilityDto } from './dto/character-ability.dto.js';
+import { type CharacterDto } from './dto/character.dto.js';
 
 function groupByCharacter<T extends { characterId: number }>(
   rows: T[],

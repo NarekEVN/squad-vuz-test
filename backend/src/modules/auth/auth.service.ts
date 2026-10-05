@@ -8,20 +8,20 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/argon2';
-import { type AppConfigService } from '../../config/configuration.js';
-import { type UserRow } from '../../database/schema/index.js';
+import { type AppConfigService } from '../../config/config.types.js';
+import { ErrorCode } from '../../common/constants/error-codes.constants.js';
+import { type UserRow } from '../../database/database.types.js';
 import { UsersService } from '../users/users.service.js';
 import {
-  type AuthResponseDto,
-  UserResponseDto,
-} from './dto/auth-response.dto.js';
+  INVALID_CREDENTIALS_MESSAGE,
+  INVALID_TOKEN_MESSAGE,
+  TOKEN_TYPE,
+} from './auth.constants.js';
+import { type AccessTokenPayload } from './auth.types.js';
+import { type AuthResponseDto } from './dto/auth-response.dto.js';
 import { type LoginDto } from './dto/login.dto.js';
 import { type RegisterDto } from './dto/register.dto.js';
-
-export interface AccessTokenPayload {
-  sub: string;
-  email: string;
-}
+import { UserResponseDto } from './dto/user-response.dto.js';
 
 @Injectable()
 export class AuthService implements OnModuleInit {
@@ -55,8 +55,8 @@ export class AuthService implements OnModuleInit {
       dto.password,
     );
     if (!user || !passwordMatches) {
-      throw new UnauthorizedException('Email or password is incorrect', {
-        description: 'INVALID_CREDENTIALS',
+      throw new UnauthorizedException(INVALID_CREDENTIALS_MESSAGE, {
+        description: ErrorCode.InvalidCredentials,
       });
     }
     return this.issueToken(user);
@@ -65,8 +65,8 @@ export class AuthService implements OnModuleInit {
   async me(userId: string): Promise<UserResponseDto> {
     const user = await this.usersService.findById(userId);
     if (!user) {
-      throw new UnauthorizedException('Missing or invalid access token', {
-        description: 'UNAUTHORIZED',
+      throw new UnauthorizedException(INVALID_TOKEN_MESSAGE, {
+        description: ErrorCode.Unauthorized,
       });
     }
     return UserResponseDto.fromRow(user);
@@ -76,7 +76,7 @@ export class AuthService implements OnModuleInit {
     const payload: AccessTokenPayload = { sub: user.id, email: user.email };
     return {
       accessToken: await this.jwtService.signAsync(payload),
-      tokenType: 'Bearer',
+      tokenType: TOKEN_TYPE,
       expiresIn: this.expiresInSeconds,
       user: UserResponseDto.fromRow(user),
     };

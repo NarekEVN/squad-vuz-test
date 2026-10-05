@@ -1,12 +1,4 @@
-import {
-  BadRequestException,
-  Controller,
-  Get,
-  Param,
-  ParseIntPipe,
-  Query,
-  Res,
-} from '@nestjs/common';
+import { Controller, Get, Param, Query, Res } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
   ApiHeader,
@@ -16,39 +8,21 @@ import {
   ApiTags,
 } from '@nestjs/swagger';
 import { type Response } from 'express';
+import { CACHE_STATUS_HEADER } from '../../common/constants/http.constants.js';
 import { Public } from '../../common/decorators/public.decorator.js';
 import { ErrorResponseDto } from '../../common/dto/error-response.dto.js';
-import { type CacheResult } from '../../integrations/redis/cache.service.js';
+import { withCacheHeader } from '../../common/utils/cache-header.util.js';
 import { CharactersService } from './characters.service.js';
-import {
-  CharacterDto,
-  CharacterFiltersResponseDto,
-  CharacterListResponseDto,
-} from './dto/character.dto.js';
+import { CharacterFiltersResponseDto } from './dto/character-filters-response.dto.js';
+import { CharacterListResponseDto } from './dto/character-list-response.dto.js';
+import { CharacterDto } from './dto/character.dto.js';
 import { ListCharactersQueryDto } from './dto/list-characters-query.dto.js';
-
-const CACHE_HEADER = 'X-Cache';
-
-class ParseCharacterIdPipe extends ParseIntPipe {
-  constructor() {
-    super({
-      exceptionFactory: () =>
-        new BadRequestException('Character id must be an integer', {
-          description: 'INVALID_ID',
-        }),
-    });
-  }
-}
-
-function send<T>(res: Response, result: CacheResult<T>): T {
-  res.setHeader(CACHE_HEADER, result.status);
-  return result.value;
-}
+import { ParseCharacterIdPipe } from './pipes/parse-character-id.pipe.js';
 
 @Public()
 @ApiTags('characters')
 @ApiHeader({
-  name: CACHE_HEADER,
+  name: CACHE_STATUS_HEADER,
   description: 'HIT, MISS or BYPASS (Redis unavailable)',
   required: false,
 })
@@ -67,7 +41,7 @@ export class CharactersController {
     @Query() query: ListCharactersQueryDto,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CharacterListResponseDto> {
-    return send(res, await this.charactersService.list(query));
+    return withCacheHeader(res, await this.charactersService.list(query));
   }
 
   @Get('filters')
@@ -76,7 +50,7 @@ export class CharactersController {
   async filters(
     @Res({ passthrough: true }) res: Response,
   ): Promise<CharacterFiltersResponseDto> {
-    return send(res, await this.charactersService.filters());
+    return withCacheHeader(res, await this.charactersService.filters());
   }
 
   @Get(':id')
@@ -91,6 +65,6 @@ export class CharactersController {
     @Param('id', ParseCharacterIdPipe) id: number,
     @Res({ passthrough: true }) res: Response,
   ): Promise<CharacterDto> {
-    return send(res, await this.charactersService.findOne(id));
+    return withCacheHeader(res, await this.charactersService.findOne(id));
   }
 }

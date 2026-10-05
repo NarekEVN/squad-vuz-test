@@ -10,16 +10,7 @@ import {
   text,
   unique,
 } from 'drizzle-orm/pg-core';
-
-export const ABILITY_NAMES = [
-  'Mobility',
-  'Technique',
-  'Survivability',
-  'Power',
-  'Energy',
-] as const;
-
-export type AbilityName = (typeof ABILITY_NAMES)[number];
+import { ABILITY_NAMES } from '../database.constants.js';
 
 export const abilityName = pgEnum('ability_name', ABILITY_NAMES);
 
@@ -97,5 +88,3 @@ export const characterAbilities = pgTable(
     ),
   ],
 );
-
-export type CharacterRow = typeof characters.$inferSelect;

@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
-import { type AppConfigService } from '../../config/configuration.js';
+import { type AppConfigService } from '../../config/config.types.js';
 import { CacheService } from './cache.service.js';
 import { REDIS_CLIENT } from './redis.constants.js';
 

@@ -23,6 +23,3 @@ export const users = pgTable(
     uniqueIndex('users_email_lower_key').on(sql`lower(${table.email})`),
   ],
 );
-
-export type UserRow = typeof users.$inferSelect;
-export type NewUserRow = typeof users.$inferInsert;

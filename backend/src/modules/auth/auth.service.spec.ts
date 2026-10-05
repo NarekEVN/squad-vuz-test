@@ -3,9 +3,10 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash } from '@node-rs/argon2';
 import { type Mock } from 'vitest';
-import { type UserRow } from '../../database/schema/index.js';
+import { type UserRow } from '../../database/database.types.js';
 import { type UsersService } from '../users/users.service.js';
-import { type AccessTokenPayload, AuthService } from './auth.service.js';
+import { AuthService } from './auth.service.js';
+import { type AccessTokenPayload } from './auth.types.js';
 
 const SECRET = 'unit-test-secret-that-is-at-least-32-chars';
 

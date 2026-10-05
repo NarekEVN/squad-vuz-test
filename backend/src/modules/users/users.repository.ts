@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { eq, sql } from 'drizzle-orm';
-import { DRIZZLE, type Database } from '../../database/database.module.js';
+import { DRIZZLE } from '../../database/database.constants.js';
+import { type Database } from '../../database/database.types.js';
 import {
   type NewUserRow,
   type UserRow,
-  users,
-} from '../../database/schema/index.js';
+} from '../../database/database.types.js';
+import { users } from '../../database/schema/index.js';
 
 @Injectable()
 export class UsersRepository {

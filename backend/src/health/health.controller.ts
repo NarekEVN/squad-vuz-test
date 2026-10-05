@@ -8,10 +8,10 @@ import {
 import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { Public } from '../common/decorators/public.decorator.js';
-import { DRIZZLE, type Database } from '../database/database.module.js';
+import { DRIZZLE } from '../database/database.constants.js';
+import { type Database } from '../database/database.types.js';
 import { REDIS_CLIENT } from '../integrations/redis/redis.constants.js';
-
-const CHECK_TIMEOUT_MS = 1_500;
+import { HEALTH_CHECK_TIMEOUT_MS } from './health.constants.js';
 
 @ApiTags('health')
 @Controller('health')
@@ -35,14 +35,14 @@ export class HealthController {
           .attempt(async () => {
             await this.db.execute(sql`select 1`);
           })
-          .withTimeout(CHECK_TIMEOUT_MS),
+          .withTimeout(HEALTH_CHECK_TIMEOUT_MS),
       () =>
         this.indicator
           .check('redis')
           .attempt(async () => {
             await this.redis.ping();
           })
-          .withTimeout(CHECK_TIMEOUT_MS),
+          .withTimeout(HEALTH_CHECK_TIMEOUT_MS),
     ]);
   }
 }

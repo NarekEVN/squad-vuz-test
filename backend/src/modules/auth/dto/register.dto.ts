@@ -1,16 +1,18 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsString, MaxLength, MinLength } from 'class-validator';
-import { normalizeEmail } from './normalize-email.js';
-
-export const PASSWORD_MIN_LENGTH = 8;
-export const PASSWORD_MAX_LENGTH = 128;
+import { normalizeEmail } from '../../../common/transformers/normalize-email.transformer.js';
+import {
+  EMAIL_MAX_LENGTH,
+  PASSWORD_MAX_LENGTH,
+  PASSWORD_MIN_LENGTH,
+} from '../auth.constants.js';
 
 export class RegisterDto {
   @ApiProperty({ example: 'test@example.com' })
   @Transform(normalizeEmail)
   @IsEmail()
-  @MaxLength(254)
+  @MaxLength(EMAIL_MAX_LENGTH)
   email: string;
 
   @ApiProperty({

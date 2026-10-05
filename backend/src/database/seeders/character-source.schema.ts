@@ -1,7 +1,7 @@
 import { z } from 'zod';
-import { ABILITY_NAMES } from '../schema/index.js';
+import { ABILITY_NAMES } from '../database.constants.js';
 
-const sourceCharacterSchema = z.object({
+export const sourceCharacterSchema = z.object({
   id: z.number().int().positive(),
   name: z.string().min(1),
   quote: z.string().optional(),
@@ -25,5 +25,3 @@ const sourceCharacterSchema = z.object({
 });
 
 export const sourceCharactersSchema = z.array(sourceCharacterSchema);
-
-export type SourceCharacter = z.infer<typeof sourceCharacterSchema>;

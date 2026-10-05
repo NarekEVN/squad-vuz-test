@@ -3,10 +3,8 @@ import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
-import { type AppConfigService } from './config/configuration.js';
-
-export const API_PREFIX = 'api/v1';
-export const DOCS_PATH = 'api/docs';
+import { API_PREFIX, DOCS_PATH } from './app.constants.js';
+import { type AppConfigService } from './config/config.types.js';
 
 export function configureApp(app: INestApplication): void {
   const config = app.get<AppConfigService>(ConfigService);

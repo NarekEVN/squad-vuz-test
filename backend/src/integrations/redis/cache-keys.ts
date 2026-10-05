@@ -1,8 +1,4 @@
-export const CacheScope = {
-  Characters: 'characters',
-} as const;
-
-export type CacheScope = (typeof CacheScope)[keyof typeof CacheScope];
+import { type CacheScope } from './redis.types.js';
 
 export function cacheVersionKey(scope: CacheScope): string {
   return `cache:${scope}:version`;

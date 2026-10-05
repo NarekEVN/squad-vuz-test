@@ -1,6 +1,6 @@
 import { ConflictException } from '@nestjs/common';
 import { type Mock } from 'vitest';
-import { type UserRow } from '../../database/schema/index.js';
+import { type UserRow } from '../../database/database.types.js';
 import { type UsersRepository } from './users.repository.js';
 import { UsersService } from './users.service.js';
 

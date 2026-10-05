@@ -6,11 +6,12 @@ import {
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
-import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator.js';
+import { ErrorCode } from '../../common/constants/error-codes.constants.js';
+import { BEARER_PREFIX } from '../../common/constants/http.constants.js';
+import { IS_PUBLIC_KEY } from '../../common/constants/metadata.constants.js';
 import { type AuthenticatedRequest } from '../../common/types/request.types.js';
-import { type AccessTokenPayload } from './auth.service.js';
-
-const BEARER_PREFIX = 'Bearer ';
+import { INVALID_TOKEN_MESSAGE } from './auth.constants.js';
+import { type AccessTokenPayload } from './auth.types.js';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -31,8 +32,8 @@ export class JwtAuthGuard implements CanActivate {
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const payload = await this.verifyBearerToken(request.headers.authorization);
     if (!payload) {
-      throw new UnauthorizedException('Missing or invalid access token', {
-        description: 'UNAUTHORIZED',
+      throw new UnauthorizedException(INVALID_TOKEN_MESSAGE, {
+        description: ErrorCode.Unauthorized,
       });
     }
 

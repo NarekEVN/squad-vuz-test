@@ -7,15 +7,8 @@ import {
   Logger,
 } from '@nestjs/common';
 import { type Response } from 'express';
-
-export interface ErrorResponseBody {
-  statusCode: number;
-  error: string;
-  message: string;
-  details?: unknown;
-}
-
-const ERROR_CODE_PATTERN = /^[A-Z][A-Z0-9_]*$/;
+import { ERROR_CODE_PATTERN } from '../constants/error-codes.constants.js';
+import { type ErrorResponseDto } from '../dto/error-response.dto.js';
 
 function codeForStatus(status: number): string {
   const name = (HttpStatus as unknown as Record<number, string | undefined>)[
@@ -30,7 +23,7 @@ function errorCode(candidate: unknown, status: number): string {
     : codeForStatus(status);
 }
 
-export function toErrorBody(exception: unknown): ErrorResponseBody {
+export function toErrorBody(exception: unknown): ErrorResponseDto {
   if (!(exception instanceof HttpException)) {
     return {
       statusCode: HttpStatus.INTERNAL_SERVER_ERROR,

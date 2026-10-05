@@ -1,5 +1,5 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { Transform, type TransformFnParams, Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   ArrayMaxSize,
   IsArray,
@@ -11,33 +11,24 @@ import {
   MaxLength,
   Min,
 } from 'class-validator';
-
-export const CHARACTER_SORT_FIELDS = ['name', 'id'] as const;
-export const SORT_ORDERS = ['asc', 'desc'] as const;
-export const TAG_MATCH_MODES = ['any', 'all'] as const;
-
-export type CharacterSortField = (typeof CHARACTER_SORT_FIELDS)[number];
-export type SortOrder = (typeof SORT_ORDERS)[number];
-export type TagMatchMode = (typeof TAG_MATCH_MODES)[number];
-
-export const DEFAULT_PAGE_SIZE = 20;
-export const MAX_PAGE_SIZE = 50;
-
-function toTrimmedString({ value }: TransformFnParams): unknown {
-  return typeof value === 'string' ? value.trim() || undefined : value;
-}
-
-function toStringList({ value }: TransformFnParams): unknown {
-  const items = (Array.isArray(value) ? value : [value]) as unknown[];
-  if (!items.every((item) => typeof item === 'string')) {
-    return value;
-  }
-  const values = items
-    .flatMap((item) => item.split(','))
-    .map((item) => item.trim())
-    .filter(Boolean);
-  return values.length > 0 ? [...new Set(values)].sort() : undefined;
-}
+import { toStringList } from '../../../common/transformers/string-list.transformer.js';
+import { toTrimmedString } from '../../../common/transformers/trimmed-string.transformer.js';
+import {
+  CHARACTER_SORT_FIELDS,
+  CURSOR_MAX_LENGTH,
+  DEFAULT_PAGE_SIZE,
+  FILTER_VALUE_MAX_LENGTH,
+  FILTER_VALUES_MAX_COUNT,
+  MAX_PAGE_SIZE,
+  SEARCH_MAX_LENGTH,
+  SORT_ORDERS,
+  TAG_MATCH_MODES,
+} from '../characters.constants.js';
+import {
+  type CharacterSortField,
+  type SortOrder,
+  type TagMatchMode,
+} from '../characters.types.js';
 
 export class ListCharactersQueryDto {
   @ApiPropertyOptional({
@@ -47,7 +38,7 @@ export class ListCharactersQueryDto {
   @IsOptional()
   @Transform(toTrimmedString)
   @IsString()
-  @MaxLength(50)
+  @MaxLength(SEARCH_MAX_LENGTH)
   search?: string;
 
   @ApiPropertyOptional({
@@ -58,9 +49,9 @@ export class ListCharactersQueryDto {
   @IsOptional()
   @Transform(toStringList)
   @IsArray()
-  @ArrayMaxSize(25)
+  @ArrayMaxSize(FILTER_VALUES_MAX_COUNT)
   @IsString({ each: true })
-  @MaxLength(50, { each: true })
+  @MaxLength(FILTER_VALUE_MAX_LENGTH, { each: true })
   tags?: string[];
 
   @ApiPropertyOptional({
@@ -80,9 +71,9 @@ export class ListCharactersQueryDto {
   @IsOptional()
   @Transform(toStringList)
   @IsArray()
-  @ArrayMaxSize(25)
+  @ArrayMaxSize(FILTER_VALUES_MAX_COUNT)
   @IsString({ each: true })
-  @MaxLength(50, { each: true })
+  @MaxLength(FILTER_VALUE_MAX_LENGTH, { each: true })
   universe?: string[];
 
   @ApiPropertyOptional({ enum: CHARACTER_SORT_FIELDS, default: 'name' })
@@ -107,11 +98,9 @@ export class ListCharactersQueryDto {
   @Max(MAX_PAGE_SIZE)
   limit: number = DEFAULT_PAGE_SIZE;
 
-  @ApiPropertyOptional({
-    description: 'nextCursor from the previous page',
-  })
+  @ApiPropertyOptional({ description: 'nextCursor from the previous page' })
   @IsOptional()
   @IsString()
-  @MaxLength(512)
+  @MaxLength(CURSOR_MAX_LENGTH)
   cursor?: string;
 }
