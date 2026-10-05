@@ -21,8 +21,10 @@ export const sessionSlice = createSlice({
   selectors: {
     selectIsAuthenticated: (state) => state.token !== null,
     selectSessionUser: (state) => state.user,
+    selectSessionToken: (state) => state.token,
   },
 })
 
 export const { sessionStarted } = sessionSlice.actions
-export const { selectIsAuthenticated, selectSessionUser } = sessionSlice.selectors
+export const { selectIsAuthenticated, selectSessionUser, selectSessionToken } =
+  sessionSlice.selectors

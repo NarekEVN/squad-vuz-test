@@ -2,6 +2,7 @@ import {
   type AbilityName,
   type SquadRow,
 } from '../../database/database.types.js';
+import { type SquadChange } from './squads.constants.js';
 
 export interface SquadMemberSlot {
   characterId: number;
@@ -36,4 +37,13 @@ export interface SquadStats {
   memberCount: number;
   overallAverage: number | null;
   abilities: AbilityStat[];
+}
+
+export type SquadChangeReason = (typeof SquadChange)[keyof typeof SquadChange];
+
+export interface SquadChangedEvent {
+  userId: string;
+  squadId: string;
+  reason: SquadChangeReason;
+  characterId?: number;
 }

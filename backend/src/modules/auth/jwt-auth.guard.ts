@@ -5,19 +5,18 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
-import { JwtService } from '@nestjs/jwt';
 import { ErrorCode } from '../../common/constants/error-codes.constants.js';
 import { BEARER_PREFIX } from '../../common/constants/http.constants.js';
 import { IS_PUBLIC_KEY } from '../../common/constants/metadata.constants.js';
 import { type AuthenticatedRequest } from '../../common/types/request.types.js';
 import { INVALID_TOKEN_MESSAGE } from './auth.constants.js';
-import { type AccessTokenPayload } from './auth.types.js';
+import { AuthService } from './auth.service.js';
 
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(
     private readonly reflector: Reflector,
-    private readonly jwtService: JwtService,
+    private readonly authService: AuthService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -30,25 +29,19 @@ export class JwtAuthGuard implements CanActivate {
     }
 
     const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
-    const payload = await this.verifyBearerToken(request.headers.authorization);
-    if (!payload) {
+    const header = request.headers.authorization;
+    const user = header?.startsWith(BEARER_PREFIX)
+      ? await this.authService.verifyAccessToken(
+          header.slice(BEARER_PREFIX.length),
+        )
+      : undefined;
+    if (!user) {
       throw new UnauthorizedException(INVALID_TOKEN_MESSAGE, {
         description: ErrorCode.Unauthorized,
       });
     }
 
-    request.user = { id: payload.sub, email: payload.email };
+    request.user = user;
     return true;
-  }
-
-  private async verifyBearerToken(
-    header: string | undefined,
-  ): Promise<AccessTokenPayload | undefined> {
-    if (!header?.startsWith(BEARER_PREFIX)) {
-      return undefined;
-    }
-    return this.jwtService
-      .verifyAsync<AccessTokenPayload>(header.slice(BEARER_PREFIX.length))
-      .catch(() => undefined);
   }
 }

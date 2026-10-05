@@ -267,8 +267,36 @@ New members take the first free slot (1–6), so removing a character leaves a g
 
 ## Bonus features
 
-- [ ] WebSockets: squad sync across tabs and devices, live popularity, Redis adapter
+- [x] **WebSockets:** squad sync across tabs and devices, live popularity, Redis adapter
 - [ ] MongoDB: squad activity log with history and pick-statistics endpoints
+
+### WebSockets
+
+A Socket.IO gateway at namespace **`/realtime`** on the API host (`ws://localhost:3000/realtime`).
+
+**Authentication:** the client sends the same JWT as the REST API, either in the handshake (`io(url, { auth: { token } })`) or as an `Authorization: Bearer` header. A connection middleware verifies it with the same `AuthService.verifyAccessToken` the HTTP guard uses. Invalid or missing tokens are refused before the connection opens, with `connect_error` carrying `{ error: "UNAUTHORIZED" }`.
+
+| Event (server → client) | Sent to                                                                         | Payload                                                                                                                    |
+| ----------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `squad:changed`         | Every open session of the squad's owner (room `user:{id}`)                      | `{ squadId, reason, characterId? }`, where `reason` is `created`, `updated`, `deleted`, `member-added` or `member-removed` |
+| `popularity:updated`    | The new socket on connect, then everyone after squad changes (debounced 500 ms) | `{ characters: [{ characterId, name, thumbnail, picks }], updatedAt }`, the top 10 by number of squads                     |
+
+**How it's wired:**
+
+- `SquadsService` publishes a `squad.changed` domain event (`@nestjs/event-emitter`) after each successful change. Events fire only after the transaction commits, so a rolled-back change is never announced.
+- The realtime module listens for those events. The squads code never touches sockets, and the activity-log bonus can subscribe to the same events.
+- **Several API instances:** the gateway uses `@socket.io/redis-adapter`, so an emit on one instance reaches clients connected to any instance. The e2e tests prove this with two app instances: a change made through instance 1 reaches a socket connected to instance 2. Channel names are prefixed with `NODE_ENV`, so tests and the dev stack sharing one Redis never see each other's events.
+- **Frontend:** `features/realtime-sync` opens the socket while logged in and closes it on logout.
+  - `squad:changed` invalidates the RTK Query cache for that squad and the squad list, so other tabs refetch and update without a reload.
+  - `popularity:updated` feeds the "Most picked right now" strip, which has a live/reconnecting indicator.
+  - Socket.IO reconnects automatically.
+
+**Trade-offs:**
+
+- `squad:changed` carries no squad data, so receivers refetch it over REST. That keeps one source of truth and its ownership checks, at the cost of one extra request per change.
+- The tab that made the change also receives the event and refetches once. That's harmless, and simpler than tracking socket ids.
+- Popularity is a `COUNT(*) … GROUP BY` over `squad_members` (indexed on `character_id`), recomputed at most twice a second per instance.
+- A token that expires while connected keeps that socket open until it reconnects.
 
 _TODO: explain why the activity log fits a document store._
 

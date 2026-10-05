@@ -6,6 +6,7 @@ import { useActiveSquad } from '../../../entities/squad/model/use-active-squad'
 import { CharacterFiltersPanel } from '../../../widgets/character-filters-panel/ui/CharacterFiltersPanel'
 import { CharactersTable } from '../../../widgets/characters-table/ui/CharactersTable'
 import { Header } from '../../../widgets/header/ui/Header'
+import { LivePopularity } from '../../../widgets/live-popularity/ui/LivePopularity'
 import { SquadOverview } from '../../../widgets/squad-overview/ui/SquadOverview'
 
 export function SquadBuilderPage() {
@@ -29,6 +30,7 @@ export function SquadBuilderPage() {
             </Alert>
           )}
           <SquadOverview squad={squad} isLoading={isLoading && !isError} />
+          <LivePopularity />
           <CharacterFiltersPanel />
           <CharactersTable squad={squad} />
         </Stack>

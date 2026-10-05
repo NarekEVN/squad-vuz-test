@@ -45,3 +45,19 @@ export interface SquadSummaryBody {
   name: string;
   memberCount: number;
 }
+
+export interface SquadChangedBody {
+  squadId: string;
+  reason: string;
+  characterId?: number;
+}
+
+export interface PopularityBody {
+  characters: {
+    characterId: number;
+    name: string;
+    thumbnail: string;
+    picks: number;
+  }[];
+  updatedAt: string;
+}

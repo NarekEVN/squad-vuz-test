@@ -8,6 +8,7 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { hash, verify } from '@node-rs/argon2';
+import { type AuthUser } from '../../common/types/request.types.js';
 import { type AppConfigService } from '../../config/config.types.js';
 import { ErrorCode } from '../../common/constants/error-codes.constants.js';
 import { type UserRow } from '../../database/database.types.js';
@@ -60,6 +61,16 @@ export class AuthService implements OnModuleInit {
       });
     }
     return this.issueToken(user);
+  }
+
+  async verifyAccessToken(token: string): Promise<AuthUser | undefined> {
+    try {
+      const payload =
+        await this.jwtService.verifyAsync<AccessTokenPayload>(token);
+      return { id: payload.sub, email: payload.email };
+    } catch {
+      return undefined;
+    }
   }
 
   async me(userId: string): Promise<UserResponseDto> {

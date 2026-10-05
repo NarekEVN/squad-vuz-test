@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { EventEmitterModule } from '@nestjs/event-emitter';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import { REQUEST_ID_HEADER } from './common/constants/http.constants.js';
@@ -13,6 +14,7 @@ import { HealthModule } from './health/health.module.js';
 import { RedisModule } from './integrations/redis/redis.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
 import { CharactersModule } from './modules/characters/characters.module.js';
+import { RealtimeModule } from './modules/realtime/realtime.module.js';
 import { SquadsModule } from './modules/squads/squads.module.js';
 
 @Module({
@@ -23,6 +25,7 @@ import { SquadsModule } from './modules/squads/squads.module.js';
       envFilePath: process.env.NODE_ENV === 'test' ? '.env.test' : '.env',
       load: [configuration],
     }),
+    EventEmitterModule.forRoot(),
     LoggerModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: AppConfigService) => {
@@ -66,6 +69,7 @@ import { SquadsModule } from './modules/squads/squads.module.js';
     AuthModule,
     CharactersModule,
     SquadsModule,
+    RealtimeModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

@@ -2,6 +2,7 @@ import { combineSlices, configureStore } from '@reduxjs/toolkit'
 import { activeSquadSlice } from '../entities/squad/model/active-squad.slice'
 import { sessionSlice } from '../entities/session/model/session.slice'
 import { characterFiltersSlice } from '../features/character-filters/model/character-filters.slice'
+import { realtimeSlice } from '../features/realtime-sync/model/realtime.slice'
 import { baseApi } from '../shared/api/base-api'
 import { STORAGE_KEYS } from '../shared/config/storage.constants'
 import { writeStorage } from '../shared/lib/storage'
@@ -12,6 +13,7 @@ const rootReducer = combineSlices(
   sessionSlice,
   activeSquadSlice,
   characterFiltersSlice,
+  realtimeSlice,
   notificationsSlice,
 )
 

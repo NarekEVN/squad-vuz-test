@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 import {
   type SquadRow,
   type Transaction,
@@ -22,16 +23,21 @@ import { type CreateSquadDto } from './dto/create-squad.dto.js';
 import { type SquadSummaryDto } from './dto/squad-summary.dto.js';
 import { type SquadDto } from './dto/squad.dto.js';
 import { type UpdateSquadDto } from './dto/update-squad.dto.js';
-import { MAX_SQUADS_PER_USER } from './squads.constants.js';
+import {
+  MAX_SQUADS_PER_USER,
+  SQUAD_CHANGED_EVENT,
+  SquadChange,
+} from './squads.constants.js';
 import { toSquadDto, toSquadSummaryDto } from './squads.mapper.js';
 import { SquadsRepository } from './squads.repository.js';
-import { type SquadState } from './squads.types.js';
+import { type SquadChangedEvent, type SquadState } from './squads.types.js';
 
 @Injectable()
 export class SquadsService {
   constructor(
     private readonly squadsRepository: SquadsRepository,
     private readonly charactersService: CharactersService,
+    private readonly events: EventEmitter2,
   ) {}
 
   async list(userId: string): Promise<SquadSummaryDto[]> {
@@ -67,6 +73,11 @@ export class SquadsService {
       const members = slotsInOrder(characterIds);
       await this.squadsRepository.insertMembers(tx, squad.id, members);
       return { squad, members };
+    });
+    this.publish({
+      userId,
+      squadId: state.squad.id,
+      reason: SquadChange.Created,
     });
     return this.toDto(state);
   }
@@ -109,6 +120,7 @@ export class SquadsService {
       const members = await this.squadsRepository.findMembers(squadId, tx);
       return { squad, members };
     });
+    this.publish({ userId, squadId, reason: SquadChange.Updated });
     return this.toDto(state);
   }
 
@@ -116,6 +128,7 @@ export class SquadsService {
     if (!(await this.squadsRepository.delete(userId, squadId))) {
       throw squadNotFound();
     }
+    this.publish({ userId, squadId, reason: SquadChange.Deleted });
   }
 
   async addMember(
@@ -145,6 +158,12 @@ export class SquadsService {
       const squad = await this.squadsRepository.update(tx, squadId, {});
       return { squad, members: [...members, slot] };
     });
+    this.publish({
+      userId,
+      squadId,
+      reason: SquadChange.MemberAdded,
+      characterId,
+    });
     return this.toDto(state);
   }
 
@@ -164,7 +183,17 @@ export class SquadsService {
       const members = await this.squadsRepository.findMembers(squadId, tx);
       return { squad, members };
     });
+    this.publish({
+      userId,
+      squadId,
+      reason: SquadChange.MemberRemoved,
+      characterId,
+    });
     return this.toDto(state);
+  }
+
+  private publish(event: SquadChangedEvent): void {
+    this.events.emit(SQUAD_CHANGED_EVENT, event);
   }
 
   private async lockOwnedSquad(

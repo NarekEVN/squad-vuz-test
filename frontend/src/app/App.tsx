@@ -1,6 +1,7 @@
 import CssBaseline from '@mui/material/CssBaseline'
 import { ThemeProvider } from '@mui/material/styles'
 import { Provider } from 'react-redux'
+import { RealtimeSync } from '../features/realtime-sync/ui/RealtimeSync'
 import { theme } from '../shared/theme/theme'
 import { NotificationSnackbar } from '../shared/ui/NotificationSnackbar'
 import { AppRouter } from './router/AppRouter'
@@ -11,6 +12,7 @@ export function App() {
     <Provider store={store}>
       <ThemeProvider theme={theme}>
         <CssBaseline />
+        <RealtimeSync />
         <AppRouter />
         <NotificationSnackbar />
       </ThemeProvider>
