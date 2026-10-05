@@ -39,18 +39,18 @@ docker compose up --build
 
 This starts PostgreSQL, Redis and MongoDB, runs the database migrations, seeds the characters from the original JSON file (idempotent), and starts the API and the frontend.
 
-_TODO: migrations, seed and the frontend service aren't wired in yet. Today this starts the databases and the API._
+_TODO: the frontend service isn't wired in yet. Today this starts the databases, runs migrations and the seed, and starts the API._
 
 If a host port is already taken, override it, for example `POSTGRES_PORT=5433 docker compose up --build` (also `REDIS_PORT`, `MONGO_PORT`, `API_PORT`).
 
 ## URLs
 
-| Service           | URL                                          |
-| ----------------- | -------------------------------------------- |
-| Frontend          | http://localhost:5173 _(TODO: confirm port)_ |
-| API               | http://localhost:3000/api/v1                 |
-| Swagger / OpenAPI | http://localhost:3000/api/docs               |
-| Health check      | http://localhost:3000/api/v1/health          |
+| Service           | URL                                     |
+| ----------------- | --------------------------------------- |
+| Frontend          | http://localhost:3001 _(TODO: wire up)_ |
+| API               | http://localhost:3000/api/v1            |
+| Swagger / OpenAPI | http://localhost:3000/api/docs          |
+| Health check      | http://localhost:3000/api/v1/health     |
 
 ## Tech stack
 
@@ -92,11 +92,52 @@ _TODO: describe the module boundaries (auth, users, characters, squads, cache, h
 
 ## Database schema
 
-_TODO: add the ER diagram and explain the reasoning once the characters JSON has been analysed._
+```mermaid
+erDiagram
+  universes ||--o{ characters : has
+  characters ||--o{ character_tags : has
+  tags ||--o{ character_tags : labels
+  characters ||--|{ character_abilities : has
+  users ||--o{ squads : owns
+
+  universes { int id PK; text name UK }
+  characters { int id PK "source id"; text name; text quote "nullable"; text image; text thumbnail "nullable"; int universe_id FK }
+  tags { int id PK; text name UK }
+  character_tags { int character_id PK,FK; int tag_id PK,FK; smallint slot "unique per character" }
+  character_abilities { int character_id PK,FK; ability_name ability PK "enum"; smallint score "1-10" }
+  users { uuid id PK; text email "unique on lower(email)"; text password_hash }
+```
+
+_Squads are added with the squads module._
+
+**Why it looks like this** (from profiling all 208 characters in `characters.json`):
+
+- **The source `id` is the primary key.** Ids are unique integers 1–208, so the seed upserts on them and can run any number of times without duplicates. Squads reference these same ids.
+- **`universes` and `tags` are lookup tables.** There are 4 universes and 21 tags, repeated across hundreds of rows. Filters join on small integer keys, and `GET /characters/filters` reads the lists straight from these tables.
+- **`character_tags` keeps the tag `slot`** (1–3) so tags come back in the original order. The primary key `(character_id, tag_id)` prevents duplicates, and `(tag_id, character_id)` is indexed for filtering by tag.
+- **Abilities are rows, not columns.** Every character has the same 5 abilities scored 1–10, stored as `character_abilities(character_id, ability, score)` with a Postgres enum for the names and a check constraint on the range. Squad stats become a single `AVG(score) ... GROUP BY ability`, and a new ability would need no schema change.
+- **Data quirks are kept, not fixed.** RoboCop has no `quote`, Skarlet has no `tags` and Android 21 (Lab Coat) has no `thumbnail`, so those columns allow empty values and Skarlet has zero tag rows. The API falls back to `image` when `thumbnail` is missing. The `grappling` tag (used once, beside 24 uses of `grapple`) is kept exactly as in the source.
+- **Indexes:** a trigram GIN index on `lower(name)` for `ILIKE '%term%'` search, `(name, id)` for sorting and keyset pagination by name, and `universe_id`. With 208 rows Postgres correctly prefers a full scan (0.06 ms measured with `EXPLAIN ANALYZE`). With the btree index hidden, it does use the trigram index, so search stays fast as data grows.
+
+**Seeding:** `src/database/seed.ts` validates the JSON's shape with zod, then upserts universes, tags and characters and rebuilds their tag and ability rows in one transaction. Docker mounts `frontend/src/data` read-only at `/data`, so the original file is the single source of truth and cannot be modified. The entrypoint runs migrate, then seed, on every start.
 
 ## Caching strategy
 
-_TODO: describe the key design, version-key invalidation driven by the seed, TTLs, and what is deliberately not cached._
+Character reads are cached in Redis. Squads are per-user and change often, so they are not cached.
+
+| What          | Key                                          |
+| ------------- | -------------------------------------------- |
+| A list page   | `cache:characters:v{version}:list:{hash}`    |
+| One character | `cache:characters:v{version}:character:{id}` |
+| Filter values | `cache:characters:v{version}:filters`        |
+
+- **Identical requests share a key.** The hash covers the filters, sort, order, page size and cursor position after normalizing them: values are trimmed, de-duplicated and sorted, and defaults are filled in. So `tags=ninja,human` and `tags=human, ninja` hit the same entry.
+- **Invalidation is a version bump.** Every key embeds `cache:characters:version`, and the seed runs `INCR` on it after writing, so old entries stop being read immediately and expire through their TTL (`CACHE_TTL_SECONDS`, default 1 hour). This avoids scanning or deleting keys.
+- **Concurrent misses load once.** If several requests miss the same key at the same moment, one database load serves them all.
+- **Redis outages degrade, they don't fail.** If Redis is unreachable, requests read straight from Postgres.
+- **Every characters response says what happened** in an `X-Cache` header: `HIT`, `MISS`, or `BYPASS` when Redis is down.
+
+**Measured** (dev mode, 50 items, median of 11 requests): 6.7 ms on a miss, 2.4 ms on a hit. With statement logging enabled, an uncached list page ran exactly **4 SQL queries whatever its size** (page, total, tags, abilities), a single character 3 and the filter values 2, so there are no N+1 queries.
 
 ## API overview
 
@@ -115,6 +156,28 @@ Full interactive docs are in Swagger at `/api/docs`. Every endpoint uses the `/a
 | POST / DELETE        | `/squads/:id/characters/:characterId` | JWT  |
 | GET                  | `/health`                             | —    |
 
+### Characters
+
+`GET /characters` query parameters (all optional):
+
+| Param           | Meaning                                                                                 |
+| --------------- | --------------------------------------------------------------------------------------- |
+| `search`        | Case-insensitive substring of the name. `%`, `_` and `\` match literally                |
+| `tags`          | Tag names, comma-separated (`tags=alien,strong`) or repeated (`tags=alien&tags=strong`) |
+| `tagMatch`      | `any` (default): a character has at least one of the tags. `all`: it has every one      |
+| `universe`      | Universe names, comma-separated or repeated                                             |
+| `sort`, `order` | `name` (default) or `id`; `asc` (default) or `desc`                                     |
+| `limit`         | 1–50, default 20                                                                        |
+| `cursor`        | The `nextCursor` from the previous page                                                 |
+
+Different filters combine with AND. The response is `{ items, nextCursor, total }`, where `nextCursor` is `null` on the last page.
+
+**Why cursor pagination:** the frontend loads more results as you scroll. A keyset cursor on `(name, id)` never skips or repeats a character when pages are fetched one after another, and it stays fast however deep you go, unlike `OFFSET`. The cursor is opaque and records its sort, so reusing it with a different sort returns `INVALID_CURSOR`. The trade-off is that you can't jump to page N; `total` lets the UI still show "44 results".
+
+Each character is returned as `{ id, name, quote, image, thumbnail, universe, tags, abilities }`. `tags` is a list of names in their original slot order, and `abilities` is `[{ name, score }]` in a fixed order (Mobility, Technique, Survivability, Power, Energy).
+
+`GET /characters/filters` returns `{ universes, tags, abilities, sortFields }`; universes and tags come as `{ name, count }`, so the frontend builds its filter UI from the data instead of hard-coding it.
+
 Error response format:
 
 ```json
@@ -125,16 +188,24 @@ Error response format:
 }
 ```
 
-| Code                  | Status | When                                                                              |
-| --------------------- | ------ | --------------------------------------------------------------------------------- |
-| `VALIDATION_FAILED`   | 400    | Invalid or unknown fields; `details` lists each field's errors                    |
-| `UNAUTHORIZED`        | 401    | Missing, malformed, forged or expired token, or the user no longer exists         |
-| `INVALID_CREDENTIALS` | 401    | Wrong email or password (same response for both, so emails can't be probed)       |
-| `EMAIL_TAKEN`         | 409    | Registering an email that exists, case-insensitively                              |
-| `NOT_FOUND`           | 404    | Unknown route                                                                     |
-| `SERVICE_UNAVAILABLE` | 503    | `/health` when Postgres or Redis is down; `details` has the per-dependency report |
-
-_TODO: squad and character codes._
+| Code                         | Status | When                                                                                  |
+| ---------------------------- | ------ | ------------------------------------------------------------------------------------- |
+| `VALIDATION_FAILED`          | 400    | Invalid or unknown fields; `details` lists each field's errors                        |
+| `UNAUTHORIZED`               | 401    | Missing, malformed, forged or expired token, or the user no longer exists             |
+| `INVALID_CREDENTIALS`        | 401    | Wrong email or password (same response for both, so emails can't be probed)           |
+| `EMAIL_TAKEN`                | 409    | Registering an email that exists, case-insensitively                                  |
+| `NOT_FOUND`                  | 404    | Unknown route                                                                         |
+| `INVALID_CURSOR`             | 400    | Malformed cursor, or a cursor reused with a different sort or order                   |
+| `INVALID_ID`                 | 400    | `GET /characters/:id` with a non-numeric id                                           |
+| `CHARACTER_NOT_FOUND`        | 404    | No character with that id                                                             |
+| `SQUAD_NOT_FOUND`            | 404    | No squad with that id for the current user                                            |
+| `SQUAD_FULL`                 | 422    | More than 6 characters                                                                |
+| `CHARACTER_ALREADY_IN_SQUAD` | 409    | A character twice in the same squad                                                   |
+| `CHARACTER_NOT_IN_SQUAD`     | 404    | Removing a character that isn't in the squad                                          |
+| `UNKNOWN_CHARACTERS`         | 422    | Character ids in a create/replace that don't exist; `details.characterIds` lists them |
+| `SQUAD_NAME_TAKEN`           | 409    | The user already has a squad with that name, ignoring case                            |
+| `SQUAD_LIMIT_REACHED`        | 422    | The user already has 20 squads                                                        |
+| `SERVICE_UNAVAILABLE`        | 503    | `/health` when Postgres or Redis is down; `details` has the per-dependency report     |
 
 ### Authentication
 
@@ -146,13 +217,27 @@ _TODO: squad and character codes._
 
 ## Squad rules and concurrency
 
-The server enforces these rules:
+Every rule is enforced on the server, whatever the client sends:
 
-- a squad has at most **6** characters
-- no character appears twice in the same squad
-- every character id must exist
+| Rule                                           | Error                                                                                                               |
+| ---------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| At most **6** characters per squad             | `422 SQUAD_FULL`                                                                                                    |
+| A character appears at most once per squad     | `409 CHARACTER_ALREADY_IN_SQUAD`                                                                                    |
+| Every character id must exist                  | `422 UNKNOWN_CHARACTERS` (create/replace, with the missing ids in `details`) or `404 CHARACTER_NOT_FOUND` (add one) |
+| Squad names are unique per user, ignoring case | `409 SQUAD_NAME_TAKEN`                                                                                              |
+| At most 20 squads per user                     | `422 SQUAD_LIMIT_REACHED`                                                                                           |
+| Users only see and change their own squads     | `404 SQUAD_NOT_FOUND` (same as a missing squad, so ids can't be probed)                                             |
 
-_TODO: explain the row lock (`SELECT … FOR UPDATE`) and the DB constraints that back it up (`position` 1–6, unique `(squad, position)`, unique `(squad, character)`), and how the parallel-request test checks them._
+The rules live in pure functions (`modules/squads/domain/squad.rules.ts`) with unit tests, and squad stats are computed by `domain/squad.stats.ts`: average, min and max per ability plus an overall average, rounded to 2 decimals, with `null` for an empty squad.
+
+**Concurrency: two layers.**
+
+1. **Row locks in the app.** Every member change runs in one transaction that first locks the squad row (`SELECT … FOR UPDATE`), then reads the members, checks the rules and writes. Two requests for the same squad therefore run one after the other, and the second one sees the first one's result. Creating and renaming squads lock the user's row the same way, so the name check and the 20-squad limit can't race either.
+2. **Constraints in the database.** `squad_members` has a check that `position` is between 1 and 6, a unique `(squad_id, position)` and a primary key `(squad_id, character_id)`. Even if the app logic had a bug, Postgres could not store a 7th member or a duplicate. These are a safety net: if one ever fired it would surface as a 500, because it would mean a bug.
+
+New members take the first free slot (1–6), so removing a character leaves a gap that the next add fills. `PATCH` with `characterIds` replaces all members in the given order.
+
+**Tested against real Postgres:** 10 parallel adds to a squad with 5 members give exactly one `201` and nine `SQUAD_FULL`. 10 parallel adds to an empty squad give exactly 6 members in slots 1–6. 5 parallel adds of the same character give one `201` and four `409`s. Two parallel creates with the same name give one `201` and one `409`.
 
 ## Bonus features
 
@@ -202,7 +287,7 @@ npm install
 npm run start:dev             # pretty logs in development, JSON in production
 ```
 
-Database scripts: `npm run db:generate` (drizzle-kit migration from the schema), `npm run db:migrate` (apply migrations; the Docker entrypoint runs this on every start) and `npm run db:studio`.
+Database scripts: `npm run db:generate` (drizzle-kit migration from the schema), `npm run db:migrate` and `npm run db:seed` (the Docker entrypoint runs both on every start), and `npm run db:studio`.
 
 _TODO: add the migrate and seed commands, and the frontend steps._
 
@@ -232,7 +317,13 @@ docker compose exec postgres psql -U squad -d squad_of_champions -c "CREATE DATA
 Where the brief was ambiguous, I made a reasonable choice and recorded it here:
 
 - A user can own **many squads**. The frontend has a squad switcher.
-- _TODO: tag filter semantics, sort options, pagination type, error codes, squad name rules, stats for an empty squad._
+- Several tags match **any** of them by default (`tagMatch=all` requires every one). Different filters combine with AND.
+- Filter values that don't exist return an empty page rather than an error.
+- Characters can be sorted by `name` or `id`. Sorting by ability score is left out, because nothing in the brief asks for it.
+- The `grappling` tag is kept exactly as in the source, even though it looks like a variant of `grapple`.
+- Squad names are 1–50 characters after trimming and unique per user, ignoring case. A user can have up to 20 squads.
+- `GET /squads` returns summaries (`id`, `name`, `memberCount`, timestamps), and `GET /squads/:id` the full squad with characters and stats. Every member change returns the updated squad, so the frontend never needs a second request.
+- Stats for an empty squad are `null` rather than 0, so "no data" can't be mistaken for "scores of zero".
 
 ## Trade-offs
 

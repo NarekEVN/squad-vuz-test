@@ -68,6 +68,9 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+      CHARACTERS_JSON_PATH: /data/characters.json
+    volumes:
+      - ./frontend/src/data:/data:ro
     ports:
       - "${API_PORT:-3000}:3000"
     depends_on:
