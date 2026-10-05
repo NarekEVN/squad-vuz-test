@@ -481,8 +481,9 @@ Frontend, in a second terminal:
 
 ```bash
 cd frontend
+cp .env.example .env          # PORT=3001 and the API URL
 npm install
-npm start                     # http://localhost:3001, API URL from frontend/.env
+npm start                     # http://localhost:3001
 ```
 
 ## Testing
