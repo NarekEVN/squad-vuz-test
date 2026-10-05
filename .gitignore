@@ -44,8 +44,7 @@ backend/.env
 .env.test.local
 .env.production.local
 .env.local
-IMPLEMENTATION_PLAN.md
-Squad_of_Champions_Backend_Challenge.md
+
 
 # temp directory
 .temp

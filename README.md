@@ -1,8 +1,6 @@
 # Squad of Champions
 
-Fullstack solution to the **360 VUZ Fullstack Challenge**. You build a squad of up to 6 fighting-game champions. Characters, filtering and squads are served by a **NestJS API** backed by **PostgreSQL** and **Redis**, and consumed by a **React + Redux Toolkit** frontend.
-
-> 🚧 **Work in progress.** Sections marked _TODO_ get filled in as features land. See [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) for the roadmap.
+Fullstack solution to the **360 VUZ Fullstack Challenge**.
 
 ---
 
@@ -42,6 +40,8 @@ This starts PostgreSQL, Redis and MongoDB, runs the database migrations, seeds t
 
 Then open **http://localhost:3001**, create an account, and start picking champions.
 
+This was verified on a fresh clone with fresh volumes: all five services become healthy, and the migrations, seed, API, WebSockets and frontend work end to end. The first build takes a few minutes to download images and install dependencies; with images cached, startup takes about 20 seconds.
+
 If a host port is already taken, override it, for example `POSTGRES_PORT=5433 docker compose up --build` (also `REDIS_PORT`, `MONGO_PORT`, `API_PORT`, `FRONTEND_PORT`). If the API is served from another address, rebuild the frontend with `PUBLIC_API_URL=https://… docker compose up --build`.
 
 ## URLs
@@ -55,15 +55,15 @@ If a host port is already taken, override it, for example `POSTGRES_PORT=5433 do
 
 ## Tech stack
 
-| Layer                  | Choice                                                                  |
-| ---------------------- | ----------------------------------------------------------------------- |
-| API                    | NestJS 12, TypeScript 6 (strict), ESM                                   |
-| Database               | PostgreSQL 17 with Drizzle ORM and drizzle-kit migrations               |
-| Cache                  | Redis 7                                                                 |
-| Real-time _(bonus)_    | Socket.IO gateway with the Redis adapter                                |
-| Activity log _(bonus)_ | MongoDB 7                                                               |
-| Frontend               | React, Redux Toolkit, RTK Query, TypeScript (FSD structure)             |
-| Tooling                | Node 24 (`.nvmrc`), ESLint (typescript-eslint strict), Prettier, Vitest |
+| Layer                  | Choice                                                                                             |
+| ---------------------- | -------------------------------------------------------------------------------------------------- |
+| API                    | NestJS 12, TypeScript 6 (strict), ESM                                                              |
+| Database               | PostgreSQL 17 with Drizzle ORM and drizzle-kit migrations                                          |
+| Cache                  | Redis 7                                                                                            |
+| Real-time _(bonus)_    | Socket.IO gateway with the Redis adapter                                                           |
+| Activity log _(bonus)_ | MongoDB 7                                                                                          |
+| Frontend               | React 18 (Create React App), Redux Toolkit, RTK Query, MUI 5, TypeScript 5.9 (FSD structure)       |
+| Tooling                | Node 24 (`.nvmrc`), ESLint (typescript-eslint strict), Prettier, Vitest (backend), Jest (frontend) |
 
 ## Repository structure
 
@@ -74,7 +74,6 @@ squad-of-champions/
 ├─ docker/postgres/init/ # creates the e2e test database on first start
 ├─ docker-compose.yml    # postgres, redis, mongo, backend, frontend
 ├─ docker-compose.dev.yml # dev overrides: hot reload, debugger, pretty logs
-├─ IMPLEMENTATION_PLAN.md
 └─ README.md
 ```
 
@@ -82,14 +81,72 @@ squad-of-champions/
 
 ```mermaid
 flowchart LR
-  FE[React + RTK Query] -- REST /api/v1 --> API[NestJS API]
-  FE <-- Socket.IO --> API
-  API --> PG[(PostgreSQL)]
-  API --> R[(Redis)]
-  API -. activity events .-> M[(MongoDB)]
+  subgraph Browser
+    FE[React SPA<br/>RTK Query + Socket.IO client]
+  end
+  subgraph Docker Compose
+    NG[nginx<br/>static frontend :3001]
+    API[NestJS API :3000<br/>/api/v1 + /realtime]
+    PG[(PostgreSQL<br/>characters, users, squads)]
+    R[(Redis<br/>character cache + Socket.IO adapter)]
+    M[(MongoDB<br/>activity log)]
+  end
+  FE -- loads app --> NG
+  FE -- REST + JWT --> API
+  FE <-- WebSocket + JWT --> API
+  API --> PG
+  API <--> R
+  API -. fire-and-forget events .-> M
 ```
 
-_TODO: describe the module boundaries (auth, users, characters, squads, cache, health, realtime, activity) and the request flow._
+### Backend modules
+
+| Module               | Responsibility                                                                                                                                              | Talks to                 |
+| -------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `config`             | Reads env vars through a zod schema, fails at boot on bad config, exposes typed config                                                                      | —                        |
+| `common`             | Error filter (`{ statusCode, error, message, details? }`), validation pipe errors, error codes, `@Public()`, `@CurrentUser()`, transformers, cursor helpers | —                        |
+| `database`           | Drizzle connection, schema, migrations, idempotent seed                                                                                                     | PostgreSQL               |
+| `integrations/redis` | Redis client, version-key `CacheService`, Socket.IO Redis adapter                                                                                           | Redis                    |
+| `integrations/mongo` | MongoDB client (connects on first use, fails fast)                                                                                                          | MongoDB                  |
+| `auth`               | Register, login, `me`, global JWT guard, `verifyAccessToken` (shared with WebSockets)                                                                       | `users`                  |
+| `users`              | User lookup and creation (email uniqueness)                                                                                                                 | PostgreSQL               |
+| `characters`         | Search, filters, keyset pagination, filter values, batch lookups                                                                                            | PostgreSQL, Redis        |
+| `squads`             | CRUD, add/remove members, rules and stats (pure `domain/` functions), row locks, publishes `squad.changed`                                                  | PostgreSQL, `characters` |
+| `realtime`           | Socket.IO gateway: squad sync to the owner's sessions, debounced live popularity                                                                            | `auth`, Redis adapter    |
+| `activity`           | Records `squad.changed` events in MongoDB; history timeline and pick statistics                                                                             | MongoDB, `characters`    |
+| `health`             | Postgres and Redis (required), MongoDB (reported as degraded only)                                                                                          | all stores               |
+
+Modules depend on each other only through exported services, and **squads never calls realtime or activity directly**: it publishes a domain event after each commit, and those modules subscribe. Adding another consumer, such as notifications, wouldn't touch squad code.
+
+### Request flow: adding a character to a squad
+
+```mermaid
+sequenceDiagram
+  participant C as Client
+  participant G as JwtAuthGuard
+  participant S as SquadsService
+  participant PG as PostgreSQL
+  participant E as Event bus
+  participant RT as Realtime
+  participant A as Activity
+  C->>G: POST /squads/:id/characters/:cid (Bearer)
+  G->>S: user from verified JWT, ids parsed by pipes
+  S->>PG: BEGIN, then SELECT squad FOR UPDATE (row lock)
+  S->>PG: character exists? current members?
+  S->>S: assertCanAddMember (max 6, no duplicates), first free slot
+  S->>PG: INSERT member, touch squad, COMMIT
+  S-->>E: squad.changed (after commit)
+  S->>C: 201 squad + server-computed stats
+  E-->>RT: emit squad:changed to the owner's room, schedule popularity
+  E-->>A: insert activity event (async, never blocks the request)
+```
+
+A character list request takes the read path: public route → `ValidationPipe` (normalizes filters) → `CharactersService` → `CacheService` (`HIT` returns immediately) → repository (4 queries on a miss) → mapper → `X-Cache` header.
+
+**Cross-cutting:**
+
+- Every request gets an `x-request-id` (reused from the incoming header, otherwise generated), logged by `nestjs-pino` as JSON in production and pretty-printed in development.
+- Helmet sets security headers, CORS only allows `FRONTEND_URL`, and graceful shutdown closes the Postgres, Redis and Mongo connections.
 
 ## Database schema
 
@@ -100,16 +157,51 @@ erDiagram
   tags ||--o{ character_tags : labels
   characters ||--|{ character_abilities : has
   users ||--o{ squads : owns
+  squads ||--o{ squad_members : has
+  characters ||--o{ squad_members : "picked in"
 
-  universes { int id PK; text name UK }
-  characters { int id PK "source id"; text name; text quote "nullable"; text image; text thumbnail "nullable"; int universe_id FK }
-  tags { int id PK; text name UK }
-  character_tags { int character_id PK,FK; int tag_id PK,FK; smallint slot "unique per character" }
-  character_abilities { int character_id PK,FK; ability_name ability PK "enum"; smallint score "1-10" }
-  users { uuid id PK; text email "unique on lower(email)"; text password_hash }
+  universes {
+    int id PK
+    text name UK
+  }
+  characters {
+    int id PK "source id"
+    text name
+    text quote "nullable"
+    text image
+    text thumbnail "nullable"
+    int universe_id FK
+  }
+  tags {
+    int id PK
+    text name UK
+  }
+  character_tags {
+    int character_id PK, FK
+    int tag_id PK, FK
+    smallint slot "unique per character"
+  }
+  character_abilities {
+    int character_id PK, FK
+    ability_name ability PK "enum"
+    smallint score "1 to 10"
+  }
+  users {
+    uuid id PK
+    text email "unique on lower(email)"
+    text password_hash
+  }
+  squads {
+    uuid id PK
+    uuid user_id FK
+    text name "unique per user on lower(name)"
+  }
+  squad_members {
+    uuid squad_id PK, FK
+    int character_id PK, FK
+    smallint position "1 to 6, unique per squad"
+  }
 ```
-
-_Squads are added with the squads module._
 
 **Why it looks like this** (from profiling all 208 characters in `characters.json`):
 
@@ -155,7 +247,11 @@ Full interactive docs are in Swagger at `/api/docs`. Every endpoint uses the `/a
 | GET / POST           | `/squads`                             | JWT  |
 | GET / PATCH / DELETE | `/squads/:id`                         | JWT  |
 | POST / DELETE        | `/squads/:id/characters/:characterId` | JWT  |
+| GET                  | `/squads/:id/history`                 | JWT  |
+| GET                  | `/activity/stats/picks`               | JWT  |
 | GET                  | `/health`                             | —    |
+
+Real-time updates use Socket.IO at `ws://localhost:3000/realtime` (see [WebSockets](#websockets)).
 
 ### Characters
 
@@ -224,8 +320,8 @@ The challenge's Create React App is kept, as the brief provides it, and refactor
 src/
 ├─ app/       store, router (protected and guest routes), providers
 ├─ pages/     squad-builder, login, register
-├─ widgets/   header, squad-overview, character-filters-panel, characters-table
-├─ features/  auth, character-filters, toggle-squad-member, squad-switcher
+├─ widgets/   header, squad-overview, live-popularity, character-filters-panel, characters-table
+├─ features/  auth, character-filters, toggle-squad-member, squad-switcher, squad-history, realtime-sync
 ├─ entities/  session, character, squad (RTK Query endpoints, slices, small UI)
 └─ shared/    base API, config, theme, helpers, notifications
 ```
@@ -343,13 +439,14 @@ All settings come from environment variables. See [`backend/.env.example`](backe
 
 ## Development mode (Docker)
 
-`docker-compose.dev.yml` runs the backend with hot reload instead of the production image:
+`docker-compose.dev.yml` runs both apps with hot reload instead of the production images:
 
 - Source is mounted from `./backend`, and `nest start --watch` reloads about 2 seconds after you save.
 - `NODE_ENV=development`, so logs are pretty-printed.
 - Migrations run on every start.
 - The Node debugger listens on `localhost:9229` (override with `DEBUG_PORT`). Attach from VS Code or Chrome DevTools.
-- The dev image is tagged `squad-of-champions-backend:dev`, so it never replaces the production image.
+- The frontend runs the CRA dev server on the same port (3001), with your `./frontend` source mounted.
+- The dev images are tagged `:dev`, so they never replace the production images.
 
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.dev.yml up --build
@@ -397,9 +494,10 @@ npm run format:check  # Prettier
 npm run typecheck     # tsc --noEmit
 npm test              # unit tests (no infrastructure needed)
 
-# e2e tests run against the compose databases, using a separate Postgres
-# database (squad_of_champions_test) and Redis DB index 1, from backend/.env.test
-docker compose up -d --wait postgres redis
+# e2e tests run against the compose services, using a separate Postgres
+# database (squad_of_champions_test), Redis DB index 1 and a separate Mongo
+# database, all from backend/.env.test
+docker compose up -d --wait postgres redis mongo
 npm run test:e2e
 ```
 
@@ -408,6 +506,17 @@ The test database is created automatically the first time the Postgres volume st
 ```bash
 docker compose exec postgres psql -U squad -d squad_of_champions -c "CREATE DATABASE squad_of_champions_test OWNER squad"
 ```
+
+**What's covered:**
+
+- **Backend:** 31 unit tests for the business logic: squad rules, stats, the member diff, auth, and the email race. 109 e2e tests against real Postgres, Redis and Mongo:
+  - pagination over every sort, and filters compared against `characters.json` itself
+  - caching: hit, miss, version bump and Redis down
+  - auth and every error code
+  - squad rules, including four concurrency races
+  - the WebSocket gateway across two API instances
+  - activity history and the aggregation pipeline, including Mongo being down
+- **Frontend:** 14 unit tests for optimistic squad updates, formatting and activity descriptions.
 
 Frontend:
 
@@ -434,8 +543,24 @@ Where the brief was ambiguous, I made a reasonable choice and recorded it here:
 
 ## Trade-offs
 
-_TODO_
+- **Create React App instead of Vite.** The challenge ships CRA and asks for a refactor, not a migration, so I kept it. It's slower and no longer maintained. TypeScript was upgraded to 5.9 through an npm `overrides` entry, because RTK Query's infinite queries need it.
+- **JWT in localStorage, no refresh tokens.** The session survives reloads with very little code, but injected scripts could read the token. React escapes everything it renders and no HTML is injected, which lowers the risk without removing it. Access tokens last 1 hour.
+- **Cursor pagination over offset.** It's stable while scrolling and fast however deep you go, but there's no "jump to page N". `total` is still returned so the UI can show result counts.
+- **The cache is invalidated by version, not by key.** One `INCR` makes every stale entry unreachable. The cost is that a re-seed throws away the whole characters cache. That's fine here, because character data only changes through the seed.
+- **WebSocket events carry no data.** `squad:changed` makes receivers refetch over REST: one source of truth and one set of ownership checks, at the cost of an extra request per change.
+- **The activity log is eventually consistent.** Events are written after the Postgres commit and never block a request. If the process dies in between, an event can be lost. That's acceptable for analytics, but not for an audit trail (see the outbox below).
+- **Popularity is computed live** with `COUNT(*) GROUP BY` and debounced to 500 ms. That's simple and always correct, but each instance repeats the query.
+- **Two databases plus Redis.** MongoDB is a bonus requirement. At this data size a `jsonb` table in Postgres would do the same job with one less service. The README's MongoDB section explains where Mongo pays off.
+- **Gaps between the UI and the API.** The universe filter and `tagMatch=all` exist in the API but aren't in the UI, because the design doesn't include them. Tag chips are alphabetical rather than in the design's order.
 
 ## What I would improve with more time
 
-_TODO_
+- **Safer auth:** a short-lived access token kept in memory, plus a rotating refresh token in an httpOnly, SameSite cookie with a revocation list in Redis. The WebSocket would also disconnect sockets whose token has expired.
+- **Rate limiting** on `/auth/*` and squad mutations, using `@nestjs/throttler` with Redis storage.
+- **Transactional outbox:** write domain events to Postgres inside the squad transaction and deliver them to Mongo and the WebSockets from a worker, so no event is lost on a crash.
+- **CI:** GitHub Actions running lint, type checks and unit tests for both apps, plus the e2e suite with Postgres, Redis and Mongo service containers. Also Dependabot.
+- **Frontend tests:** component tests (React Testing Library) for the table, filters and optimistic rollback, and a few Playwright end-to-end tests of the main journey.
+- **Observability:** OpenTelemetry tracing across HTTP, database and Redis calls, Prometheus metrics (cache hit ratio, query latency, socket counts) and dashboards.
+- **Performance at scale:** precomputed popularity (a Redis sorted set updated on each event), list virtualization in the table, and image CDN resizing for thumbnails.
+- **Product:** the universe filter and "match all tags" in the UI, sharing a squad by link, and an activity dashboard showing the pick statistics as charts.
+- **Deployment:** a live demo (for example the API and frontend on Fly.io or Render with managed Postgres, Redis and Mongo), with migrations run as a release step.
