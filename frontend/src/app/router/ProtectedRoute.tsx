@@ -1,0 +1,9 @@
+import { Navigate, Outlet } from 'react-router-dom'
+import { selectIsAuthenticated } from '../../entities/session/model/session.slice'
+import { ROUTES } from '../../shared/config/routes.constants'
+import { useAppSelector } from '../../shared/lib/store-hooks'
+
+export function ProtectedRoute() {
+  const isAuthenticated = useAppSelector(selectIsAuthenticated)
+  return isAuthenticated ? <Outlet /> : <Navigate to={ROUTES.login} replace />
+}

@@ -52,11 +52,11 @@ describe('App foundation (e2e)', () => {
   it('sets security headers and allows the configured CORS origin', async () => {
     const res = await request(app.getHttpServer())
       .get('/api/v1/health')
-      .set('Origin', 'http://localhost:5173');
+      .set('Origin', 'http://localhost:3001');
 
     expect(res.headers['x-content-type-options']).toBe('nosniff');
     expect(res.headers['access-control-allow-origin']).toBe(
-      'http://localhost:5173',
+      'http://localhost:3001',
     );
   });
 

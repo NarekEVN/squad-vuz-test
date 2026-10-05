@@ -16,6 +16,7 @@ Fullstack solution to the **360 VUZ Fullstack Challenge**. You build a squad of 
 - [Database schema](#database-schema)
 - [Caching strategy](#caching-strategy)
 - [API overview](#api-overview)
+- [Frontend](#frontend)
 - [Squad rules and concurrency](#squad-rules-and-concurrency)
 - [Bonus features](#bonus-features)
 - [Configuration](#configuration)
@@ -39,18 +40,18 @@ docker compose up --build
 
 This starts PostgreSQL, Redis and MongoDB, runs the database migrations, seeds the characters from the original JSON file (idempotent), and starts the API and the frontend.
 
-_TODO: the frontend service isn't wired in yet. Today this starts the databases, runs migrations and the seed, and starts the API._
+Then open **http://localhost:3001**, create an account, and start picking champions.
 
-If a host port is already taken, override it, for example `POSTGRES_PORT=5433 docker compose up --build` (also `REDIS_PORT`, `MONGO_PORT`, `API_PORT`).
+If a host port is already taken, override it, for example `POSTGRES_PORT=5433 docker compose up --build` (also `REDIS_PORT`, `MONGO_PORT`, `API_PORT`, `FRONTEND_PORT`). If the API is served from another address, rebuild the frontend with `PUBLIC_API_URL=https://… docker compose up --build`.
 
 ## URLs
 
-| Service           | URL                                     |
-| ----------------- | --------------------------------------- |
-| Frontend          | http://localhost:3001 _(TODO: wire up)_ |
-| API               | http://localhost:3000/api/v1            |
-| Swagger / OpenAPI | http://localhost:3000/api/docs          |
-| Health check      | http://localhost:3000/api/v1/health     |
+| Service           | URL                                 |
+| ----------------- | ----------------------------------- |
+| Frontend          | http://localhost:3001               |
+| API               | http://localhost:3000/api/v1        |
+| Swagger / OpenAPI | http://localhost:3000/api/docs      |
+| Health check      | http://localhost:3000/api/v1/health |
 
 ## Tech stack
 
@@ -215,6 +216,31 @@ Error response format:
 - Login runs the hash check even when the email doesn't exist, so response times don't reveal which emails are registered.
 - Tokens are HS256 JWTs, valid for `JWT_EXPIRES_IN_SECONDS`. There are no refresh tokens (out of scope).
 
+## Frontend
+
+The challenge's Create React App is kept, as the brief provides it, and refactored to **Feature-Sliced Design**. The characters JSON is no longer imported anywhere in the UI; everything comes from the API.
+
+```
+src/
+├─ app/       store, router (protected and guest routes), providers
+├─ pages/     squad-builder, login, register
+├─ widgets/   header, squad-overview, character-filters-panel, characters-table
+├─ features/  auth, character-filters, toggle-squad-member, squad-switcher
+├─ entities/  session, character, squad (RTK Query endpoints, slices, small UI)
+└─ shared/    base API, config, theme, helpers, notifications
+```
+
+- **Data:** Redux Toolkit with **RTK Query**. Characters use an infinite query driven by the API's `nextCursor`. More rows load as you scroll, and the trigger checks where the sentinel really is after every page, so a fast scroll can't stall it. Search is debounced by 300 ms, and tag filters run on the server.
+- **Squads through the API:**
+  - Checking a row, or clicking an avatar's "Remove" overlay, updates the squad **optimistically**. The server's response then replaces it, bringing server-computed stats.
+  - If the server refuses (for example `SQUAD_FULL`), the change is **rolled back** and the server's message appears in a snackbar.
+  - A user can have several squads, managed from the switcher in the header (new, rename, delete). A default "My Squad" is created on first login.
+- **"My Team"** filters the table down to the active squad's members, and the search box and tags still apply. **"Clear all"** resets every filter.
+- **States:** skeletons while loading, an empty state with "Clear all filters", an error state with "Retry", and server validation errors shown on the right form field.
+- **Auth:** the JWT and user are kept in **localStorage**, so the session and the active squad survive a reload. Every request sends `Authorization: Bearer`, and any 401 logs out and returns to `/login`. Trade-off: a token in localStorage can be read by injected scripts (XSS). The safer option is an httpOnly refresh-token cookie with the access token kept in memory, which is listed under improvements. React escapes everything it renders, and no HTML is injected.
+- **Design:** MUI themed with the provided palette (primary `#217AFF`, red `#FF0000` for scores of 10, background `#F5FDFF`, gray `#999999`, primary overlay `rgba(33, 122, 255, 0.6)` for "Remove"), Roboto, and the design's layout.
+- **Docker:** the production image builds the app and serves it with nginx; unknown paths fall back to `index.html` and assets are cached for a year. In dev mode (`docker-compose.dev.yml`) it runs the CRA dev server with your source mounted.
+
 ## Squad rules and concurrency
 
 Every rule is enforced on the server, whatever the client sends:
@@ -289,7 +315,13 @@ npm run start:dev             # pretty logs in development, JSON in production
 
 Database scripts: `npm run db:generate` (drizzle-kit migration from the schema), `npm run db:migrate` and `npm run db:seed` (the Docker entrypoint runs both on every start), and `npm run db:studio`.
 
-_TODO: add the migrate and seed commands, and the frontend steps._
+Frontend, in a second terminal:
+
+```bash
+cd frontend
+npm install
+npm start                     # http://localhost:3001, API URL from frontend/.env
+```
 
 ## Testing
 
@@ -310,6 +342,16 @@ The test database is created automatically the first time the Postgres volume st
 
 ```bash
 docker compose exec postgres psql -U squad -d squad_of_champions -c "CREATE DATABASE squad_of_champions_test OWNER squad"
+```
+
+Frontend:
+
+```bash
+cd frontend
+npm run typecheck
+npm run lint
+npm run format:check
+CI=true npm test      # unit tests (optimistic squad updates, formatting)
 ```
 
 ## Assumptions

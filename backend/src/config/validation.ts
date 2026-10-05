@@ -16,7 +16,7 @@ export const envSchema = z.object({
     .enum(['development', 'test', 'production'])
     .default('development'),
   PORT: z.coerce.number().int().positive().default(3000),
-  FRONTEND_URL: commaSeparatedList.default(['http://localhost:5173']),
+  FRONTEND_URL: commaSeparatedList.default(['http://localhost:3001']),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'])
     .default('info'),
