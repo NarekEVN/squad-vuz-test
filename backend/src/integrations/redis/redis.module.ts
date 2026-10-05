@@ -8,8 +8,8 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { Redis } from 'ioredis';
 import { type AppConfigService } from '../../config/configuration.js';
-
-export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
+import { CacheService } from './cache.service.js';
+import { REDIS_CLIENT } from './redis.constants.js';
 
 @Global()
 @Module({
@@ -37,8 +37,9 @@ export const REDIS_CLIENT = Symbol('REDIS_CLIENT');
         return client;
       },
     },
+    CacheService,
   ],
-  exports: [REDIS_CLIENT],
+  exports: [REDIS_CLIENT, CacheService],
 })
 export class RedisModule implements OnApplicationShutdown {
   constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}

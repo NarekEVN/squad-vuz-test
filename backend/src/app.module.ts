@@ -13,6 +13,7 @@ import { DatabaseModule } from './database/database.module.js';
 import { HealthModule } from './health/health.module.js';
 import { RedisModule } from './integrations/redis/redis.module.js';
 import { AuthModule } from './modules/auth/auth.module.js';
+import { CharactersModule } from './modules/characters/characters.module.js';
 
 const REQUEST_ID_HEADER = 'x-request-id';
 
@@ -65,6 +66,7 @@ const REQUEST_ID_HEADER = 'x-request-id';
     RedisModule,
     HealthModule,
     AuthModule,
+    CharactersModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: HttpExceptionFilter },

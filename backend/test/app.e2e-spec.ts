@@ -1,5 +1,5 @@
 import request from 'supertest';
-import { REDIS_CLIENT } from '../src/integrations/redis/redis.module.js';
+import { REDIS_CLIENT } from '../src/integrations/redis/redis.constants.js';
 import { createTestApp, type TestApp } from './utils/create-app.js';
 
 describe('App foundation (e2e)', () => {

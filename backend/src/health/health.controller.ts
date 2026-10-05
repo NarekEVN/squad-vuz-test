@@ -9,7 +9,7 @@ import { sql } from 'drizzle-orm';
 import { Redis } from 'ioredis';
 import { Public } from '../common/decorators/public.decorator.js';
 import { DRIZZLE, type Database } from '../database/database.module.js';
-import { REDIS_CLIENT } from '../integrations/redis/redis.module.js';
+import { REDIS_CLIENT } from '../integrations/redis/redis.constants.js';
 
 const CHECK_TIMEOUT_MS = 1_500;
 

@@ -11,7 +11,7 @@ FROM deps AS dev
 ENV NODE_ENV=development
 COPY . .
 EXPOSE 3000 9229
-CMD ["sh", "-c", "npm run db:migrate && npx nest start --watch --debug 0.0.0.0:9229"]
+CMD ["sh", "-c", "npm run db:migrate && npm run db:seed && npx nest start --watch --debug 0.0.0.0:9229"]
 
 FROM deps AS build
 COPY . .
