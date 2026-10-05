@@ -1,0 +1,15 @@
+services:
+  backend:
+    image: squad-of-champions-backend:dev
+    build:
+      target: dev
+    environment:
+      NODE_ENV: development
+    ports:
+      - "127.0.0.1:${DEBUG_PORT:-9229}:9229"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    healthcheck:
+      start_period: 60s
+      start_interval: 2s

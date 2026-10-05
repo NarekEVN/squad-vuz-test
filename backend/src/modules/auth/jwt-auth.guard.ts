@@ -1,0 +1,53 @@
+import {
+  type CanActivate,
+  type ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
+import { JwtService } from '@nestjs/jwt';
+import { IS_PUBLIC_KEY } from '../../common/decorators/public.decorator.js';
+import { type AuthenticatedRequest } from '../../common/types/request.types.js';
+import { type AccessTokenPayload } from './auth.service.js';
+
+const BEARER_PREFIX = 'Bearer ';
+
+@Injectable()
+export class JwtAuthGuard implements CanActivate {
+  constructor(
+    private readonly reflector: Reflector,
+    private readonly jwtService: JwtService,
+  ) {}
+
+  async canActivate(context: ExecutionContext): Promise<boolean> {
+    const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(
+      IS_PUBLIC_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (isPublic) {
+      return true;
+    }
+
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
+    const payload = await this.verifyBearerToken(request.headers.authorization);
+    if (!payload) {
+      throw new UnauthorizedException('Missing or invalid access token', {
+        description: 'UNAUTHORIZED',
+      });
+    }
+
+    request.user = { id: payload.sub, email: payload.email };
+    return true;
+  }
+
+  private async verifyBearerToken(
+    header: string | undefined,
+  ): Promise<AccessTokenPayload | undefined> {
+    if (!header?.startsWith(BEARER_PREFIX)) {
+      return undefined;
+    }
+    return this.jwtService
+      .verifyAsync<AccessTokenPayload>(header.slice(BEARER_PREFIX.length))
+      .catch(() => undefined);
+  }
+}
